@@ -1,6 +1,7 @@
 package application_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/ovh/cds/engine/api/application"
@@ -22,7 +23,7 @@ func Test_DAOKey(t *testing.T) {
 		Name: "my-app",
 	}
 
-	require.NoError(t, application.Insert(db, cache, *proj, &app))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
 	k := &sdk.ApplicationKey{
 		Name:          "mykey-ssh",
@@ -38,12 +39,12 @@ func Test_DAOKey(t *testing.T) {
 	require.NoError(t, application.InsertKey(db, k))
 	assert.Equal(t, sdk.PasswordPlaceholder, k.Private)
 
-	ks, err := application.LoadAllKeys(db, app.ID)
+	ks, err := application.LoadAllKeys(context.TODO(), db, app.ID)
 	require.NoError(t, err)
 
 	assert.Equal(t, sdk.PasswordPlaceholder, ks[0].Private)
 
-	ks, err = application.LoadAllKeysWithPrivateContent(db, app.ID)
+	ks, err = application.LoadKeysWithPrivateContent(context.TODO(), db, app.ID)
 	require.NoError(t, err)
 
 	assert.Equal(t, kssh.Private, ks[0].Private)

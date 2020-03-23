@@ -8,6 +8,7 @@ import (
 
 	"github.com/ovh/cds/engine/api/application"
 	"github.com/ovh/cds/engine/api/metrics"
+	"github.com/ovh/cds/engine/api/project"
 	"github.com/ovh/cds/engine/service"
 	"github.com/ovh/cds/sdk"
 )
@@ -15,20 +16,25 @@ import (
 func (api *API) getApplicationMetricHandler() service.Handler {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 		vars := mux.Vars(r)
-		key := vars[permProjectKey]
+		projectKey := vars[permProjectKey]
 		appName := vars["applicationName"]
 		metricName := vars["metricName"]
 
-		app, errA := application.LoadByName(api.mustDB(), api.Cache, key, appName)
-		if errA != nil {
-			return sdk.WrapError(errA, "getApplicationMetricHandler> unable to load application")
-		}
-
-		result, err := metrics.GetMetrics(ctx, api.mustDB(), key, app.ID, metricName)
+		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
 		if err != nil {
-			return sdk.WrapError(err, "Cannot get metrics")
-
+			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
+
+		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName)
+		if err != nil {
+			return err
+		}
+
+		result, err := metrics.GetMetrics(ctx, api.mustDB(), proj.Key, app.ID, metricName)
+		if err != nil {
+			return sdk.WrapError(err, "cannot get metrics")
+		}
+
 		return service.WriteJSON(w, result, http.StatusOK)
 	}
 }

@@ -55,7 +55,7 @@ func (api *API) updateAsCodePipelineHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrForbidden)
 		}
 
-		apps, err := application.LoadAsCode(api.mustDB(), api.Cache, key, fromRepo)
+		apps, err := application.LoadAllByProjectIDAndRepository(ctx, api.mustDB(), proj.ID, fromRepo)
 		if err != nil {
 			return err
 		}

@@ -82,7 +82,7 @@ var adminMetadataProjectImportCmd = cli.Command{
 	Long: `Metadata are represented with key:value
 
 Example of a csv file for a CDS Project
-	
+
 	project_key;project_name;last_modified;ou1;ou2
 	YOUR_PROJECT_KEY;Your Project Name;2020-01-01T00:00:00;OU_1_VALUE;OU_2_VALUE
 
@@ -98,7 +98,7 @@ var adminMetadataApplicationImportCmd = cli.Command{
 	Long: `Metadata are represented with key:value
 
 Example of a csv file for a CDS Application
-	
+
 	project_key;application_name;last_modified;vcs_repofullname;ou1;ou2
 	YOUR_PROJECT_KEY;Your Application Name;2020-01-01T00:00:00;repo_of_application;OU_1_VALUE;OU_2_VALUE
 
@@ -207,7 +207,7 @@ func adminMetadataApplicationExportRun(c cli.Values) error {
 			}
 
 			lines = append(lines, lineMetadata{
-				key:          a.ProjectKey,
+				key:          p.Key,
 				name:         a.Name,
 				lastModified: a.LastModified,
 				metadata:     m,

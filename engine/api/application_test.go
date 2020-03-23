@@ -50,7 +50,7 @@ func Test_postApplicationMetadataHandler_AsProvider(t *testing.T) {
 			"a1": "a1",
 		},
 	}
-	if err := application.Insert(api.mustDB(), api.Cache, *proj, app); err != nil {
+	if err := application.Insert(api.mustDB(), api.Cache, proj.ID, app); err != nil {
 		t.Fatal(err)
 	}
 
@@ -60,7 +60,7 @@ func Test_postApplicationMetadataHandler_AsProvider(t *testing.T) {
 	})
 
 	test.NoError(t, sdkclient.ApplicationMetadataUpdate(pkey, app.Name, "b1", "b1"))
-	app, err = application.LoadByName(api.mustDB(), api.Cache, pkey, app.Name)
+	app, err = application.LoadByProjectIDAndName(context.TODO(), api.mustDB(), proj.ID, app.Name)
 	test.NoError(t, err)
 	assert.Equal(t, "a1", app.Metadata["a1"])
 	assert.Equal(t, "b1", app.Metadata["b1"])

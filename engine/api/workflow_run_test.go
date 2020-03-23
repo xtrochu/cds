@@ -695,7 +695,7 @@ func Test_getWorkflowNodeRunHandler(t *testing.T) {
 		ProjectID: proj.ID,
 		Name:      "app",
 	}
-	require.NoError(t, application.Insert(db, api.Cache, *proj, &app))
+	require.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 
 	//First pipeline
 	pip := sdk.Pipeline{
@@ -1029,7 +1029,7 @@ func Test_postWorkflowRunAsyncFailedHandler(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	assert.NoError(t, application.Insert(db, api.Cache, *proj, &app))
+	assert.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 	assert.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	w := sdk.Workflow{

@@ -1,21 +1,23 @@
 package application
 
 import (
+	"context"
 	"fmt"
 	"io"
 
 	"github.com/go-gorp/gorp"
 
-	"github.com/ovh/cds/engine/api/cache"
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/exportentities"
 )
 
 // Export an application
-func Export(db gorp.SqlExecutor, cache cache.Store, key string, appName string, f exportentities.Format, encryptFunc sdk.EncryptFunc, w io.Writer) (int, error) {
+func Export(ctx context.Context, db gorp.SqlExecutor, projectID int64, appName string, f exportentities.Format, encryptFunc sdk.EncryptFunc, w io.Writer) (int, error) {
 	// Load app
-	app, errload := LoadByName(db, cache, key, appName,
-		LoadOptions.WithVariablesWithClearPassword, LoadOptions.WithClearKeys, LoadOptions.WithClearDeploymentStrategies,
+	app, errload := LoadByProjectIDAndName(ctx, db, projectID, appName,
+		LoadOptions.WithVariablesWithClearPassword,
+		LoadOptions.WithClearKeys,
+		LoadOptions.WithClearDeploymentStrategies,
 	)
 	if errload != nil {
 		return 0, sdk.WrapError(errload, "application.Export> Cannot load application %s", appName)

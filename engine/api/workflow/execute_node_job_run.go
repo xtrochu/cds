@@ -305,7 +305,7 @@ func LoadNodeJobRunKeys(ctx context.Context, db gorp.SqlExecutor, proj *sdk.Proj
 		appMap, has := wr.Workflow.Applications[n.Context.ApplicationID]
 		if has {
 			app = &appMap
-			keys, err := application.LoadAllKeysWithPrivateContent(db, app.ID)
+			keys, err := application.LoadKeysWithPrivateContent(ctx, db, app.ID)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -391,7 +391,7 @@ func LoadNodeJobRunKeys(ctx context.Context, db gorp.SqlExecutor, proj *sdk.Proj
 }
 
 // LoadSecrets loads all secrets for a job run
-func LoadSecrets(db gorp.SqlExecutor, store cache.Store, nodeRun *sdk.WorkflowNodeRun, w *sdk.WorkflowRun, pv []sdk.Variable) ([]sdk.Variable, error) {
+func LoadSecrets(ctx context.Context, db gorp.SqlExecutor, store cache.Store, nodeRun *sdk.WorkflowNodeRun, w *sdk.WorkflowRun, pv []sdk.Variable) ([]sdk.Variable, error) {
 	var secrets []sdk.Variable
 
 	pv = sdk.VariablesFilter(pv, sdk.SecretVariable, sdk.KeyVariable)
@@ -423,15 +423,15 @@ func LoadSecrets(db gorp.SqlExecutor, store cache.Store, nodeRun *sdk.WorkflowNo
 		// Application variables
 		av := []sdk.Variable{}
 		if app != nil {
-			appVariables, err := application.LoadAllVariablesWithDecrytion(db, app.ID)
+			appVariables, err := application.LoadVariablesWithDecrytion(ctx, db, app.ID)
 			if err != nil {
-				return nil, sdk.WrapError(err, "LoadSecrets> Cannot load application variables")
+				return nil, sdk.WrapError(err, "cannot load application variables")
 			}
 			av = sdk.VariablesFilter(appVariables, sdk.SecretVariable)
 			av = sdk.VariablesPrefix(av, "cds.app.")
 
 			if err := application.DecryptVCSStrategyPassword(app); err != nil {
-				return nil, sdk.WrapError(err, "LoadSecrets> Cannot decrypt vcs configuration")
+				return nil, sdk.WrapError(err, "cannot decrypt vcs configuration")
 			}
 			av = append(av, sdk.Variable{
 				Name:  "git.http.password",

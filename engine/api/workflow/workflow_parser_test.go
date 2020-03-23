@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	v2 "github.com/ovh/cds/sdk/exportentities/v2"
 	"io/ioutil"
 	"net/http"
 	"testing"
+
+	v2 "github.com/ovh/cds/sdk/exportentities/v2"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,7 +51,7 @@ func TestParseAndImport(t *testing.T) {
 	app := &sdk.Application{
 		Name: sdk.RandomString(10),
 	}
-	test.NoError(t, application.Insert(db, cache, *proj, app))
+	test.NoError(t, application.Insert(db, cache, proj.ID, app))
 
 	//Environment
 	envName := sdk.RandomString(10)
@@ -235,7 +236,7 @@ func TestParseAndImportFromRepository(t *testing.T) {
 		RepositoryFullname: "foo/myrepo",
 		VCSServer:          "github",
 	}
-	test.NoError(t, application.Insert(db, cache, *proj, app))
+	test.NoError(t, application.Insert(db, cache, proj.ID, app))
 
 	//Environment
 	envName := sdk.RandomString(10)

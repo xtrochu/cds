@@ -156,23 +156,19 @@ func TestInsertSimpleWorkflowWithApplicationAndEnv(t *testing.T) {
 		ProjectKey: proj.Key,
 		Name:       "pip1",
 	}
-
 	test.NoError(t, pipeline.InsertPipeline(db, &pip))
 
 	app := sdk.Application{
-		ProjectID:  proj.ID,
-		ProjectKey: proj.Key,
-		Name:       "app1",
+		ProjectID: proj.ID,
+		Name:      "app1",
 	}
-
-	test.NoError(t, application.Insert(db, cache, *proj, &app))
+	test.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
 	env := sdk.Environment{
 		ProjectID:  proj.ID,
 		ProjectKey: proj.Key,
 		Name:       "env1",
 	}
-
 	test.NoError(t, environment.InsertEnvironment(db, &env))
 
 	proj, _ = project.LoadByID(db, cache, proj.ID, project.LoadOptions.WithApplications, project.LoadOptions.WithPipelines, project.LoadOptions.WithEnvironments, project.LoadOptions.WithGroups)
@@ -516,7 +512,6 @@ func TestUpdateSimpleWorkflowWithApplicationEnvPipelineParametersAndPayload(t *t
 			},
 		},
 	}
-
 	test.NoError(t, pipeline.InsertPipeline(db, &pip2))
 
 	pip3 := sdk.Pipeline{
@@ -524,31 +519,25 @@ func TestUpdateSimpleWorkflowWithApplicationEnvPipelineParametersAndPayload(t *t
 		ProjectKey: proj.Key,
 		Name:       "pip3",
 	}
-
 	test.NoError(t, pipeline.InsertPipeline(db, &pip3))
 
 	app := sdk.Application{
-		ProjectID:  proj.ID,
-		ProjectKey: proj.Key,
-		Name:       "app1",
+		ProjectID: proj.ID,
+		Name:      "app1",
 	}
-
-	test.NoError(t, application.Insert(db, cache, *proj, &app))
+	test.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
 	app2 := sdk.Application{
-		ProjectID:  proj.ID,
-		ProjectKey: proj.Key,
-		Name:       "app2",
+		ProjectID: proj.ID,
+		Name:      "app2",
 	}
-
-	test.NoError(t, application.Insert(db, cache, *proj, &app2))
+	test.NoError(t, application.Insert(db, cache, proj.ID, &app2))
 
 	env := sdk.Environment{
 		ProjectID:  proj.ID,
 		ProjectKey: proj.Key,
 		Name:       "env1",
 	}
-
 	test.NoError(t, environment.InsertEnvironment(db, &env))
 
 	proj, _ = project.LoadByID(db, cache, proj.ID, project.LoadOptions.WithApplications, project.LoadOptions.WithPipelines, project.LoadOptions.WithEnvironments, project.LoadOptions.WithGroups)

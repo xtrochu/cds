@@ -149,11 +149,10 @@ func TestLoadByWorkflowID(t *testing.T) {
 
 	proj := assets.InsertTestProject(t, db, cache, key, key)
 	app := sdk.Application{
-		Name:       "my-app",
-		ProjectKey: proj.Key,
-		ProjectID:  proj.ID,
+		Name:      "my-app",
+		ProjectID: proj.ID,
 	}
-	test.NoError(t, application.Insert(db, cache, *proj, &app))
+	test.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
 	pip := sdk.Pipeline{
 		ProjectID:  proj.ID,

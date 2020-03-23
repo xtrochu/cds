@@ -439,7 +439,7 @@ func createApplication(t *testing.T, db gorp.SqlExecutor, api *API, proj *sdk.Pr
 		RepositoryFullname: "foo/myrepo",
 		VCSServer:          "github",
 	}
-	assert.NoError(t, application.Insert(db, api.Cache, *proj, &app))
+	assert.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 	assert.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 	return &app
 }

@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/go-gorp/gorp"
+
 	"github.com/ovh/cds/engine/api/database/gorpmapping"
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/log"
 )
 
-func loadAllVariables(db gorp.SqlExecutor, query gorpmapping.Query, opts ...gorpmapping.GetOptionFunc) ([]sdk.Variable, error) {
-	var ctx = context.Background()
+func getVariables(ctx context.Context, db gorp.SqlExecutor, query gorpmapping.Query, opts ...gorpmapping.GetOptionFunc) ([]sdk.Variable, error) {
 	var res []dbApplicationVariable
 	vars := make([]sdk.Variable, 0, len(res))
 
@@ -35,31 +35,9 @@ func loadAllVariables(db gorp.SqlExecutor, query gorpmapping.Query, opts ...gorp
 	return vars, nil
 }
 
-// LoadAllVariables Get all variable for the given application
-func LoadAllVariables(db gorp.SqlExecutor, appID int64) ([]sdk.Variable, error) {
-	query := gorpmapping.NewQuery(`
-		SELECT *
-		FROM application_variable
-		WHERE application_id = $1
-		ORDER BY var_name
-			  `).Args(appID)
-	return loadAllVariables(db, query)
-}
-
-// LoadAllVariablesWithDecrytion Get all variable for the given application, it also decrypt all the secure content
-func LoadAllVariablesWithDecrytion(db gorp.SqlExecutor, appID int64) ([]sdk.Variable, error) {
-	query := gorpmapping.NewQuery(`
-		SELECT *
-		FROM application_variable
-		WHERE application_id = $1
-		ORDER BY var_name
-			  `).Args(appID)
-	return loadAllVariables(db, query, gorpmapping.GetOptions.WithDecryption)
-}
-
-func loadVariable(db gorp.SqlExecutor, q gorpmapping.Query, opts ...gorpmapping.GetOptionFunc) (*sdk.Variable, error) {
+func getVariable(ctx context.Context, db gorp.SqlExecutor, q gorpmapping.Query, opts ...gorpmapping.GetOptionFunc) (*sdk.Variable, error) {
 	var v dbApplicationVariable
-	found, err := gorpmapping.Get(context.Background(), db, q, &v, opts...)
+	found, err := gorpmapping.Get(ctx, db, q, &v, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +49,7 @@ func loadVariable(db gorp.SqlExecutor, q gorpmapping.Query, opts ...gorpmapping.
 		return nil, err
 	}
 	if !isValid {
-		log.Error(context.Background(), "application.loadVariable> application variable %d data corrupted", v.ID)
+		log.Error(ctx, "application.loadVariable> application variable %d data corrupted", v.ID)
 		return nil, sdk.WithStack(sdk.ErrNotFound)
 	}
 
@@ -79,31 +57,43 @@ func loadVariable(db gorp.SqlExecutor, q gorpmapping.Query, opts ...gorpmapping.
 	return &res, err
 }
 
+// LoadVariables for the given application.
+func LoadVariables(ctx context.Context, db gorp.SqlExecutor, appID int64) ([]sdk.Variable, error) {
+	query := gorpmapping.NewQuery(`
+		SELECT *
+		FROM application_variable
+		WHERE application_id = $1
+		ORDER BY var_name
+	`).Args(appID)
+	return getVariables(ctx, db, query)
+}
+
+// LoadVariablesWithDecrytion for the given application, it also decrypt all the secure content.
+func LoadVariablesWithDecrytion(ctx context.Context, db gorp.SqlExecutor, appID int64) ([]sdk.Variable, error) {
+	query := gorpmapping.NewQuery(`
+		SELECT *
+		FROM application_variable
+		WHERE application_id = $1
+		ORDER BY var_name
+	`).Args(appID)
+	return getVariables(ctx, db, query, gorpmapping.GetOptions.WithDecryption)
+}
+
 // LoadVariable retrieve a specific variable
-func LoadVariable(db gorp.SqlExecutor, appID int64, varName string) (*sdk.Variable, error) {
+func LoadVariable(ctx context.Context, db gorp.SqlExecutor, appID int64, varName string) (*sdk.Variable, error) {
 	query := gorpmapping.NewQuery(`SELECT * FROM application_variable
 			WHERE application_id = $1 AND var_name=$2`).Args(appID, varName)
-	return loadVariable(db, query)
+	return getVariable(ctx, db, query)
 }
 
 // LoadVariableWithDecryption retrieve a specific variable with decrypted content
-func LoadVariableWithDecryption(db gorp.SqlExecutor, appID int64, varID int64, varName string) (*sdk.Variable, error) {
+func LoadVariableWithDecryption(ctx context.Context, db gorp.SqlExecutor, appID int64, varID int64, varName string) (*sdk.Variable, error) {
 	query := gorpmapping.NewQuery(`SELECT * FROM application_variable
 			WHERE application_id = $1 AND id = $2 AND var_name=$3`).Args(appID, varID, varName)
-	return loadVariable(db, query, gorpmapping.GetOptions.WithDecryption)
+	return getVariable(ctx, db, query, gorpmapping.GetOptions.WithDecryption)
 }
 
-// DeleteAllVariables Delete all variables from the given application.
-func DeleteAllVariables(db gorp.SqlExecutor, applicationID int64) error {
-	query := `DELETE FROM application_variable
-	          WHERE application_variable.application_id = $1`
-	if _, err := db.Exec(query, applicationID); err != nil {
-		return sdk.WithStack(err)
-	}
-	return nil
-}
-
-// InsertVariable Insert a new variable in the given application
+// InsertVariable inserts a new variable in the given application.
 func InsertVariable(db gorp.SqlExecutor, appID int64, v *sdk.Variable, u sdk.Identifiable) error {
 	//Check variable name
 	rx := sdk.NamePatternRegex
@@ -138,7 +128,7 @@ func InsertVariable(db gorp.SqlExecutor, appID int64, v *sdk.Variable, u sdk.Ide
 	return nil
 }
 
-// UpdateVariable Update a variable in the given application
+// UpdateVariable updates a variable in the given application.
 func UpdateVariable(db gorp.SqlExecutor, appID int64, variable *sdk.Variable, variableBefore *sdk.Variable, u sdk.Identifiable) error {
 	rx := sdk.NamePatternRegex
 	if !rx.MatchString(variable.Name) {
@@ -174,7 +164,7 @@ func UpdateVariable(db gorp.SqlExecutor, appID int64, variable *sdk.Variable, va
 	return nil
 }
 
-// DeleteVariable Delete a variable from the given pipeline
+// DeleteVariable removes a variable from the given application.
 func DeleteVariable(db gorp.SqlExecutor, appID int64, variable *sdk.Variable, u sdk.Identifiable) error {
 	query := `DELETE FROM application_variable
 		  WHERE application_variable.application_id = $1 AND application_variable.var_name = $2`
@@ -202,6 +192,16 @@ func DeleteVariable(db gorp.SqlExecutor, appID int64, variable *sdk.Variable, u 
 
 	if err := inserAudit(db, ava); err != nil {
 		return sdk.WrapError(err, "Cannot insert audit for variable %s", variable.Name)
+	}
+	return nil
+}
+
+// DeleteVariablesByApplicationID removes all variables for given application.
+func DeleteVariablesByApplicationID(db gorp.SqlExecutor, applicationID int64) error {
+	query := `DELETE FROM application_variable
+	          WHERE application_id = $1`
+	if _, err := db.Exec(query, applicationID); err != nil {
+		return sdk.WithStack(err)
 	}
 	return nil
 }

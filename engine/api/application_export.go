@@ -17,7 +17,7 @@ func (api *API) getApplicationExportHandler() service.Handler {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 		// Get project name in URL
 		vars := mux.Vars(r)
-		key := vars[permProjectKey]
+		projectKey := vars[permProjectKey]
 		appName := vars["applicationName"]
 
 		format := FormString(r, "format")
@@ -30,7 +30,13 @@ func (api *API) getApplicationExportHandler() service.Handler {
 		if err != nil {
 			return sdk.WrapError(err, "Format invalid")
 		}
-		if _, err := application.Export(api.mustDB(), api.Cache, key, appName, f, project.EncryptWithBuiltinKey, w); err != nil {
+
+		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		if err != nil {
+			return sdk.WrapError(err, "cannot load project %s", projectKey)
+		}
+
+		if _, err := application.Export(ctx, api.mustDB(), proj.ID, appName, f, project.EncryptWithBuiltinKey, w); err != nil {
 			return sdk.WrapError(err, "getApplicationExportHandler")
 		}
 

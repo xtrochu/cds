@@ -668,7 +668,7 @@ func Test_getWorkflowPushHandler(t *testing.T) {
 	app := &sdk.Application{
 		Name: appName,
 	}
-	if err := application.Insert(api.mustDB(), api.Cache, *proj, app); err != nil {
+	if err := application.Insert(api.mustDB(), api.Cache, proj.ID, app); err != nil {
 		t.Fatal(err)
 	}
 

@@ -33,7 +33,7 @@ func ParseAndImport(ctx context.Context, db gorp.SqlExecutor, cache cache.Store,
 	}
 
 	//Check if app exist
-	oldApp, errl := LoadByName(db, cache, proj.Key, eapp.Name,
+	oldApp, errl := LoadByProjectIDAndName(ctx, db, proj.ID, eapp.Name,
 		LoadOptions.WithVariablesWithClearPassword,
 		LoadOptions.WithClearKeys,
 		LoadOptions.WithClearDeploymentStrategies,

@@ -96,7 +96,7 @@ func testRunWorkflow(t *testing.T, api *API, router *Router) testRunWorkflowCtx 
 	app := &sdk.Application{
 		Name: "app-" + sdk.RandomString(10),
 	}
-	if err := application.Insert(api.mustDB(), api.Cache, *proj, app); err != nil {
+	if err := application.Insert(api.mustDB(), api.Cache, proj.ID, app); err != nil {
 		t.Fatal(err)
 	}
 
@@ -944,7 +944,7 @@ func TestPostVulnerabilityReportHandler(t *testing.T) {
 		ProjectID: proj.ID,
 		Name:      sdk.RandomString(10),
 	}
-	assert.NoError(t, application.Insert(db, api.Cache, *proj, &app))
+	assert.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 
 	// Create workflow
 	w := sdk.Workflow{
@@ -1094,7 +1094,7 @@ func TestInsertNewCodeCoverageReport(t *testing.T) {
 		RepositoryFullname: "foo/bar",
 		VCSServer:          "repoManServ",
 	}
-	assert.NoError(t, application.Insert(db, api.Cache, *proj, &app))
+	assert.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 	assert.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	// Create workflow

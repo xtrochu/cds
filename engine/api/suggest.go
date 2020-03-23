@@ -58,26 +58,30 @@ func (api *API) getVariablesHandler() service.Handler {
 		// Load app
 		appVar := []string{}
 		if appName != "" {
-			// Check permission on application
-			app, err := application.LoadByName(api.mustDB(), api.Cache, projectKey, appName, application.LoadOptions.WithVariables)
+			proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
 			if err != nil {
-				return sdk.WrapError(err, "Cannot Load application")
+				return sdk.WrapError(err, "cannot load project %s", projectKey)
+			}
+
+			// Check permission on application
+			app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName, application.LoadOptions.WithVariables)
+			if err != nil {
+				return sdk.WrapError(err, "cannot Load application")
 			}
 
 			for _, v := range app.Variables {
 				appVar = append(appVar, fmt.Sprintf("{{.cds.app.%s}}", v.Name))
 			}
-
 		} else {
 			// Load all app variables
 			query := `
-			SELECT distinct var_name
-			FROM application_variable
-			LEFT JOIN application ON application.id = application_variable.application_id
-			LEFT JOIN project ON project.id = application.project_id
-			WHERE project.projectkey = $1
-			ORDER BY var_name;
-		`
+        SELECT distinct var_name
+        FROM application_variable
+        LEFT JOIN application ON application.id = application_variable.application_id
+        LEFT JOIN project ON project.id = application.project_id
+        WHERE project.projectkey = $1
+        ORDER BY var_name;
+      `
 			rows, err := api.mustDB().Query(query, projectKey)
 			if err != nil {
 				return sdk.WrapError(err, "Cannot Load all applications variables")
@@ -90,7 +94,6 @@ func (api *API) getVariablesHandler() service.Handler {
 					return sdk.WrapError(err, "Cannot scan results")
 				}
 				appVar = append(appVar, fmt.Sprintf("{{.cds.app.%s}}", name))
-
 			}
 		}
 		allVariables = append(allVariables, appVar...)

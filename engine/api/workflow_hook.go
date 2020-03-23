@@ -264,7 +264,7 @@ func (api *API) postWorkflowJobHookCallbackHandler() service.Handler {
 			return sdk.WrapError(err, "cannot load project variable")
 		}
 
-		secrets, err := workflow.LoadSecrets(tx, api.Cache, nil, wr, pv)
+		secrets, err := workflow.LoadSecrets(ctx, tx, api.Cache, nil, wr, pv)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load secrets")
 		}
@@ -326,7 +326,7 @@ func (api *API) getWorkflowJobHookDetailsHandler() service.Handler {
 			return sdk.WrapError(err, "cannot load project variable")
 		}
 
-		secrets, errSecret := workflow.LoadSecrets(db, api.Cache, nil, wr, pv)
+		secrets, errSecret := workflow.LoadSecrets(ctx, db, api.Cache, nil, wr, pv)
 		if errSecret != nil {
 			return sdk.WrapError(errSecret, "cannot load secrets")
 		}

@@ -170,7 +170,7 @@ func (api *API) InitRouter() {
 	r.Handle("/project/{permProjectKey}/keys/{name}", Scope(sdk.AuthConsumerScopeProject), r.DELETE(api.deleteKeyInProjectHandler))
 
 	// As Code
-	r.Handle("/project/{key}/ascode/events/resync", Scope(sdk.AuthConsumerScopeProject), r.POST(api.postResyncPRAsCodeHandler, EnableTracing()))
+	r.Handle("/project/{permProjectKey}/ascode/events/resync", Scope(sdk.AuthConsumerScopeProject), r.POST(api.postResyncPRAsCodeHandler, EnableTracing()))
 
 	// Import Application
 	r.Handle("/project/{permProjectKey}/import/application", Scope(sdk.AuthConsumerScopeProject), r.POST(api.postApplicationImportHandler))

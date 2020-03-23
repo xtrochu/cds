@@ -28,17 +28,19 @@ func Import(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 	}
 
 	if doUpdate {
-		oldApp, errlo := LoadByName(db, store, proj.Key, app.Name, LoadOptions.WithKeys, LoadOptions.WithVariablesWithClearPassword, LoadOptions.WithClearDeploymentStrategies)
+		oldApp, errlo := LoadByProjectIDAndName(ctx, db, proj.ID, app.Name,
+			LoadOptions.WithKeys,
+			LoadOptions.WithVariablesWithClearPassword,
+			LoadOptions.WithClearDeploymentStrategies,
+		)
 		if errlo != nil {
 			return sdk.WrapError(errlo, "application.Import> Unable to load application by name: %s", app.Name)
 		}
-		//Delete all Variables
-		if err := DeleteAllVariables(db, oldApp.ID); err != nil {
+
+		if err := DeleteVariablesByApplicationID(db, oldApp.ID); err != nil {
 			return sdk.WrapError(err, "Cannot delete application variable")
 		}
-
-		///Delete all Keys
-		if err := DeleteAllApplicationKeys(db, oldApp.ID); err != nil {
+		if err := DeleteKeysByApplicationID(db, oldApp.ID); err != nil {
 			return sdk.WrapError(err, "application.Import")
 		}
 
@@ -55,7 +57,7 @@ func Import(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 		}
 	} else {
 		//Save application in database
-		if err := Insert(db, store, proj, app); err != nil {
+		if err := Insert(db, store, proj.ID, app); err != nil {
 			return sdk.WrapError(err, "application.Import")
 		}
 

@@ -108,11 +108,10 @@ func Test_getWorkflowHookModelsHandlerAsAdminUser(t *testing.T) {
 
 	app := sdk.Application{
 		Name:               sdk.RandomString(10),
-		ProjectKey:         proj.Key,
 		ProjectID:          proj.ID,
 		RepositoryFullname: "ovh/cds",
 	}
-	test.NoError(t, application.Insert(db, cache, *proj, &app))
+	test.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
 	proj, _ = project.LoadByID(db, cache, proj.ID, project.LoadOptions.WithApplications,
 		project.LoadOptions.WithPipelines, project.LoadOptions.WithEnvironments, project.LoadOptions.WithGroups)

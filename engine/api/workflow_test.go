@@ -553,7 +553,7 @@ func Test_postWorkflowHandlerWithRootShouldSuccess(t *testing.T) {
 		RepositoryFullname: "test/app1",
 		VCSServer:          "github",
 	}
-	test.NoError(t, application.Insert(api.mustDB(), api.Cache, *proj, &app))
+	test.NoError(t, application.Insert(api.mustDB(), api.Cache, proj.ID, &app))
 
 	var workflow = &sdk.Workflow{
 		Name:        "Name",
@@ -616,7 +616,7 @@ func Test_postWorkflowHandlerWithBadPayloadShouldFail(t *testing.T) {
 		RepositoryFullname: "test/app1",
 		VCSServer:          "github",
 	}
-	test.NoError(t, application.Insert(api.mustDB(), api.Cache, *proj, &app))
+	test.NoError(t, application.Insert(api.mustDB(), api.Cache, proj.ID, &app))
 
 	var workflow = &sdk.Workflow{
 		Name:        "Name",
@@ -761,7 +761,7 @@ func Test_putWorkflowHandler(t *testing.T) {
 		RepositoryFullname: "foo/bar",
 		VCSServer:          "github",
 	}
-	assert.NoError(t, application.Insert(db, api.Cache, *proj, &app))
+	assert.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 	assert.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	//Prepare request
@@ -937,7 +937,7 @@ func Test_deleteWorkflowEventIntegrationHandler(t *testing.T) {
 		RepositoryFullname: "test/app1",
 		VCSServer:          "github",
 	}
-	test.NoError(t, application.Insert(api.mustDB(), api.Cache, *proj, &app))
+	test.NoError(t, application.Insert(api.mustDB(), api.Cache, proj.ID, &app))
 
 	model := sdk.IntegrationModel{
 		Name:  sdk.RandomString(10),
@@ -1133,7 +1133,7 @@ func Test_postWorkflowRollbackHandler(t *testing.T) {
 		RepositoryFullname: "test/app1",
 		VCSServer:          "github",
 	}
-	test.NoError(t, application.Insert(api.mustDB(), api.Cache, *proj, &app))
+	test.NoError(t, application.Insert(api.mustDB(), api.Cache, proj.ID, &app))
 
 	var workflow1 = &sdk.Workflow{
 		ID:          wf.ID,
@@ -1460,14 +1460,12 @@ func TestBenchmarkGetWorkflowsWithoutAPIAsAdmin(t *testing.T) {
 		Name:      "pipeline1",
 		ProjectID: proj.ID,
 	}
-
 	assert.NoError(t, pipeline.InsertPipeline(db, &pip))
 
 	app := sdk.Application{
 		Name: sdk.RandomString(10),
 	}
-
-	assert.NoError(t, application.Insert(db, cache, *proj, &app))
+	assert.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
 	prj, err := project.Load(db, cache, proj.Key,
 		project.LoadOptions.WithPipelines,
@@ -1535,7 +1533,7 @@ func TestBenchmarkGetWorkflowsWithAPI(t *testing.T) {
 		Name: sdk.RandomString(10),
 	}
 
-	assert.NoError(t, application.Insert(db, api.Cache, *proj, &app))
+	assert.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 
 	prj, err := project.Load(db, api.Cache, proj.Key,
 		project.LoadOptions.WithPipelines,

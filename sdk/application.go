@@ -12,26 +12,26 @@ type Repository struct {
 	Hook bool
 }
 
-// Application represent an application in a project
+// Application represent an application in a project.
 type Application struct {
-	ID                   int64                        `json:"id" db:"id"`
-	Name                 string                       `json:"name" db:"name" cli:"name,key"`
-	Description          string                       `json:"description"  db:"description"`
-	Icon                 string                       `json:"icon"  db:"icon"`
-	ProjectID            int64                        `json:"-" db:"project_id"`
-	ProjectKey           string                       `json:"project_key" db:"-" cli:"project_key"`
-	Variables            []Variable                   `json:"variables,omitempty" db:"-"`
-	Notifications        []UserNotification           `json:"notifications,omitempty" db:"-"`
-	LastModified         time.Time                    `json:"last_modified" db:"last_modified" mapstructure:"-"`
-	VCSServer            string                       `json:"vcs_server,omitempty" db:"vcs_server"`
-	RepositoryFullname   string                       `json:"repository_fullname,omitempty" db:"repo_fullname" cli:"repository_fullname"`
-	RepositoryStrategy   RepositoryStrategy           `json:"vcs_strategy,omitempty" db:"-"`
-	Metadata             Metadata                     `json:"metadata" yaml:"metadata" db:"-"`
-	Keys                 []ApplicationKey             `json:"keys" yaml:"keys" db:"-"`
+	ID                 int64              `json:"id" db:"id"`
+	Name               string             `json:"name" db:"name" cli:"name,key"`
+	ProjectID          int64              `json:"-" db:"project_id"`
+	RepositoryFullname string             `json:"repository_fullname,omitempty" db:"repo_fullname" cli:"repository_fullname"`
+	LastModified       time.Time          `json:"last_modified" db:"last_modified" mapstructure:"-"`
+	Metadata           Metadata           `json:"metadata" yaml:"metadata" db:"-"`
+	VCSServer          string             `json:"vcs_server,omitempty" db:"vcs_server"`
+	RepositoryStrategy RepositoryStrategy `json:"vcs_strategy,omitempty" db:"-"`
+	Icon               string             `json:"icon" db:"icon"`
+	Description        string             `json:"description" db:"description"`
+	FromRepository     string             `json:"from_repository,omitempty" db:"from_repository" cli:"-"`
+	// aggregate
 	Usage                *Usage                       `json:"usage,omitempty" db:"-" cli:"-"`
-	DeploymentStrategies map[string]IntegrationConfig `json:"deployment_strategies,omitempty" db:"-" cli:"-"`
 	Vulnerabilities      []Vulnerability              `json:"vulnerabilities,omitempty" db:"-" cli:"-"`
-	FromRepository       string                       `json:"from_repository,omitempty" db:"from_repository" cli:"-"`
+	DeploymentStrategies map[string]IntegrationConfig `json:"deployment_strategies,omitempty" db:"-" cli:"-"`
+	Variables            []Variable                   `json:"variables,omitempty" db:"-"`
+	Keys                 []ApplicationKey             `json:"keys" yaml:"keys" db:"-"`
+	Notifications        []UserNotification           `json:"notifications,omitempty" db:"-"`
 }
 
 // IsValid returns error if the application is not valid.

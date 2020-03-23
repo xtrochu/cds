@@ -181,32 +181,34 @@ func (api *API) postPerformImportAsCodeHandler() service.Handler {
 func (api *API) postResyncPRAsCodeHandler() service.Handler {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 		vars := mux.Vars(r)
-		key := vars["key"]
+		projectKey := vars["permProjectKey"]
+
 		appName := FormString(r, "appName")
 		fromRepo := FormString(r, "repo")
 
-		proj, errP := project.Load(api.mustDB(), api.Cache, key,
+		proj, err := project.Load(api.mustDB(), api.Cache, projectKey,
 			project.LoadOptions.WithApplicationWithDeploymentStrategies,
 			project.LoadOptions.WithPipelines,
 			project.LoadOptions.WithEnvironments,
 			project.LoadOptions.WithIntegrations,
 			project.LoadOptions.WithClearKeys)
-		if errP != nil {
-			return sdk.WrapError(errP, "unable to load project")
+		if err != nil {
+			return sdk.WrapError(err, "unable to load project")
 		}
+
 		var app *sdk.Application
 		if fromRepo != "" {
-			apps, err := application.LoadAsCode(api.mustDB(), api.Cache, key, fromRepo)
+			apps, err := application.LoadAllByProjectIDAndRepository(ctx, api.mustDB(), proj.ID, fromRepo)
 			if err != nil {
 				return err
 			}
 			if len(apps) == 0 {
-				return sdk.WrapError(sdk.ErrApplicationNotFound, "unable to load application as code key:%s fromRepo:%s", key, fromRepo)
+				return sdk.WrapError(sdk.ErrApplicationNotFound, "unable to load application as code key:%s fromRepo:%s", projectKey, fromRepo)
 			}
 			app = &apps[0]
 		} else {
 			var err error
-			app, err = application.LoadByName(api.mustDB(), api.Cache, key, appName)
+			app, err = application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName)
 			if err != nil {
 				return err
 			}

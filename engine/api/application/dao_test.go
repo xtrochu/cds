@@ -28,14 +28,13 @@ func TestLoadByNameAsAdmin(t *testing.T) {
 		Name: "my-app",
 	}
 
-	test.NoError(t, application.Insert(db, cache, *proj, &app))
+	test.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
-	actual, err := application.LoadByName(db, cache, key, "my-app")
+	actual, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "my-app")
 	test.NoError(t, err)
 
 	assert.Equal(t, app.Name, actual.Name)
 	assert.Equal(t, proj.ID, actual.ProjectID)
-	assert.Equal(t, proj.Key, actual.ProjectKey)
 }
 
 func TestLoadByNameAsUser(t *testing.T) {
@@ -47,16 +46,15 @@ func TestLoadByNameAsUser(t *testing.T) {
 		Name: "my-app",
 	}
 
-	require.NoError(t, application.Insert(db, cache, *proj, &app))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
 	_, _ = assets.InsertLambdaUser(t, db, &proj.ProjectGroups[0].Group)
 
-	actual, err := application.LoadByName(db, cache, key, "my-app")
+	actual, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "my-app")
 	assert.NoError(t, err)
 
 	assert.Equal(t, app.Name, actual.Name)
 	assert.Equal(t, proj.ID, actual.ProjectID)
-	assert.Equal(t, proj.Key, actual.ProjectKey)
 }
 
 func TestLoadByIDAsAdmin(t *testing.T) {
@@ -68,14 +66,13 @@ func TestLoadByIDAsAdmin(t *testing.T) {
 		Name: "my-app",
 	}
 
-	require.NoError(t, application.Insert(db, cache, *proj, &app))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
-	actual, err := application.LoadByID(db, cache, app.ID)
+	actual, err := application.LoadByID(context.TODO(), db, app.ID)
 	require.NoError(t, err)
 
 	assert.Equal(t, app.Name, actual.Name)
 	assert.Equal(t, proj.ID, actual.ProjectID)
-	assert.Equal(t, proj.Key, actual.ProjectKey)
 }
 
 func TestLoadByIDAsUser(t *testing.T) {
@@ -88,16 +85,15 @@ func TestLoadByIDAsUser(t *testing.T) {
 		Name: "my-app",
 	}
 
-	require.NoError(t, application.Insert(db, cache, *proj, &app))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
 	_, _ = assets.InsertLambdaUser(t, db, &proj.ProjectGroups[0].Group)
 
-	actual, err := application.LoadByID(db, cache, app.ID)
+	actual, err := application.LoadByID(context.TODO(), db, app.ID)
 	assert.NoError(t, err)
 
 	assert.Equal(t, app.Name, actual.Name)
 	assert.Equal(t, proj.ID, actual.ProjectID)
-	assert.Equal(t, proj.Key, actual.ProjectKey)
 }
 
 func TestLoadAllAsAdmin(t *testing.T) {
@@ -119,10 +115,10 @@ func TestLoadAllAsAdmin(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, application.Insert(db, cache, *proj, &app))
-	require.NoError(t, application.Insert(db, cache, *proj, &app2))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app2))
 
-	actual, err := application.LoadAll(db, cache, proj.Key)
+	actual, err := application.LoadAll(context.TODO(), db, proj.ID)
 	require.NoError(t, err)
 
 	assert.Equal(t, 2, len(actual))
@@ -146,12 +142,12 @@ func TestLoadAllAsUser(t *testing.T) {
 		Name: "my-app2",
 	}
 
-	require.NoError(t, application.Insert(db, cache, *proj, &app))
-	require.NoError(t, application.Insert(db, cache, *proj, &app2))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app2))
 
 	_, _ = assets.InsertLambdaUser(t, db, &proj.ProjectGroups[0].Group)
 
-	actual, err := application.LoadAll(db, cache, proj.Key)
+	actual, err := application.LoadAll(context.TODO(), db, proj.ID)
 	test.NoError(t, err)
 
 	assert.Equal(t, 2, len(actual))
@@ -164,11 +160,10 @@ func TestLoadByWorkflowID(t *testing.T) {
 
 	proj := assets.InsertTestProject(t, db, cache, key, key)
 	app := sdk.Application{
-		Name:       "my-app",
-		ProjectKey: proj.Key,
-		ProjectID:  proj.ID,
+		Name:      "my-app",
+		ProjectID: proj.ID,
 	}
-	require.NoError(t, application.Insert(db, cache, *proj, &app))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
 	pip := sdk.Pipeline{
 		ProjectID:  proj.ID,

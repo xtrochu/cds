@@ -1094,7 +1094,7 @@ func IsValid(ctx context.Context, store cache.Store, db gorp.SqlExecutor, w *sdk
 		if err := checkPipeline(ctx, db, proj, w, n, opts); err != nil {
 			return err
 		}
-		if err := checkApplication(store, db, proj, w, n); err != nil {
+		if err := checkApplication(ctx, store, db, proj, w, n); err != nil {
 			return err
 		}
 		if err := checkEnvironment(db, proj, w, n); err != nil {
@@ -1294,16 +1294,19 @@ func checkEnvironment(db gorp.SqlExecutor, proj sdk.Project, w *sdk.Workflow, n 
 }
 
 // CheckApplication checks application data
-func checkApplication(store cache.Store, db gorp.SqlExecutor, proj sdk.Project, w *sdk.Workflow, n *sdk.Node) error {
+func checkApplication(ctx context.Context, store cache.Store, db gorp.SqlExecutor, proj sdk.Project, w *sdk.Workflow, n *sdk.Node) error {
 	if n.Context.ApplicationID != 0 {
 		app, ok := w.Applications[n.Context.ApplicationID]
 		if !ok {
-			appDB, errA := application.LoadByID(db, store, n.Context.ApplicationID, application.LoadOptions.WithDeploymentStrategies, application.LoadOptions.WithVariables)
+			appDB, errA := application.LoadByID(ctx, db, n.Context.ApplicationID,
+				application.LoadOptions.WithDeploymentStrategies,
+				application.LoadOptions.WithVariables,
+			)
 			if errA != nil {
 				return errA
 			}
 			app = *appDB
-			if app.ProjectKey != proj.Key {
+			if app.ProjectID != proj.ID {
 				return sdk.NewErrorFrom(sdk.ErrResourceNotInProject, "can not found a application with id %d", n.Context.ApplicationID)
 			}
 
@@ -1313,7 +1316,10 @@ func checkApplication(store cache.Store, db gorp.SqlExecutor, proj sdk.Project, 
 		return nil
 	}
 	if n.Context.ApplicationName != "" {
-		appDB, err := application.LoadByName(db, store, proj.Key, n.Context.ApplicationName, application.LoadOptions.WithDeploymentStrategies, application.LoadOptions.WithVariables)
+		appDB, err := application.LoadByProjectIDAndName(ctx, db, proj.ID, n.Context.ApplicationName,
+			application.LoadOptions.WithDeploymentStrategies,
+			application.LoadOptions.WithVariables,
+		)
 		if err != nil {
 			if sdk.ErrorIs(err, sdk.ErrApplicationNotFound) {
 				return sdk.WithStack(sdk.ErrorWithData(sdk.ErrApplicationNotFound, n.Context.ApplicationName))

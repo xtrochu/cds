@@ -347,7 +347,7 @@ func (api *API) deleteRepositoriesManagerHandler() service.Handler {
 
 		if !force {
 			// Check that the VCS is not used by an application before removing it
-			apps, err := application.LoadAll(tx, api.Cache, projectKey)
+			apps, err := application.LoadAll(ctx, tx, p.ID)
 			if err != nil {
 				return err
 			}
@@ -363,7 +363,7 @@ func (api *API) deleteRepositoriesManagerHandler() service.Handler {
 		}
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "Cannot commit transaction")
+			return sdk.WrapError(err, "cannot commit transaction")
 		}
 
 		event.PublishDeleteVCSServer(ctx, p, vcsServer.Name, getAPIConsumer(ctx))
@@ -501,33 +501,38 @@ func (api *API) attachRepositoriesManagerHandler() service.Handler {
 		fullname := r.FormValue("fullname")
 		db := api.mustDB()
 
-		app, err := application.LoadByName(db, api.Cache, projectKey, appName)
+		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
 		if err != nil {
-			return sdk.WrapError(err, "Cannot load application %s", appName)
+			return sdk.WrapError(err, "cannot load project %s", projectKey)
+		}
+
+		app, err := application.LoadByProjectIDAndName(ctx, db, proj.ID, appName)
+		if err != nil {
+			return sdk.WrapError(err, "cannot load application %s", appName)
 		}
 
 		//Load the repositoriesManager for the project
 		rm, err := repositoriesmanager.LoadForProject(db, projectKey, rmName)
 		if err != nil {
-			return sdk.WrapError(sdk.ErrNoReposManager, "attachRepositoriesManager> error loading %s-%s: %s", projectKey, rmName, err)
+			return sdk.WrapError(sdk.ErrNoReposManager, "error loading %s-%s: %s", projectKey, rmName, err)
 		}
 
 		//Get an authorized Client
 		client, err := repositoriesmanager.AuthorizedClient(ctx, db, api.Cache, projectKey, rm)
 		if err != nil {
-			return sdk.WrapError(sdk.ErrNoReposManagerClientAuth, "attachRepositoriesManager> Cannot get client got %s %s : %s", projectKey, rmName, err)
+			return sdk.WrapError(sdk.ErrNoReposManagerClientAuth, "cannot get client got %s %s : %s", projectKey, rmName, err)
 		}
 
 		if _, err := client.RepoByFullname(ctx, fullname); err != nil {
-			return sdk.WrapError(sdk.ErrRepoNotFound, "attachRepositoriesManager> Cannot get repo %s: %s", fullname, err)
+			return sdk.WrapError(sdk.ErrRepoNotFound, "cannot get repo %s: %s", fullname, err)
 		}
 
 		app.VCSServer = rm.Name
 		app.RepositoryFullname = fullname
 
-		tx, errT := db.Begin()
-		if errT != nil {
-			return sdk.WrapError(errT, "attachRepositoriesManager> Cannot start transaction")
+		tx, err := db.Begin()
+		if err != nil {
+			return sdk.WrapError(err, "cannot start transaction")
 		}
 		defer tx.Rollback() // nolint
 
@@ -608,9 +613,14 @@ func (api *API) detachRepositoriesManagerHandler() service.Handler {
 		db := api.mustDB()
 		u := getAPIConsumer(ctx)
 
-		app, errl := application.LoadByName(db, api.Cache, projectKey, appName)
-		if errl != nil {
-			return sdk.WrapError(errl, "detachRepositoriesManager> error on load project %s", projectKey)
+		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		if err != nil {
+			return sdk.WrapError(err, "cannot load project %s", projectKey)
+		}
+
+		app, err := application.LoadByProjectIDAndName(ctx, db, proj.ID, appName)
+		if err != nil {
+			return err
 		}
 
 		// Check if there is hooks on this application
@@ -622,19 +632,19 @@ func (api *API) detachRepositoriesManagerHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrRepositoryUsedByHook)
 		}
 
-		//Remove all the things in a transaction
-		tx, errT := db.Begin()
-		if errT != nil {
-			return sdk.WrapError(errT, "detachRepositoriesManager> Cannot start transaction")
+		// Remove all the things in a transaction
+		tx, err := db.Begin()
+		if err != nil {
+			return sdk.WrapError(err, "cannot start transaction")
 		}
 		defer tx.Rollback() // nolint
 
 		if err := repositoriesmanager.DeleteForApplication(tx, app); err != nil {
-			return sdk.WrapError(err, "Cannot delete for application")
+			return sdk.WrapError(err, "cannot delete for application")
 		}
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "Cannot commit transaction")
+			return sdk.WrapError(err, "cannot commit transaction")
 		}
 
 		event.PublishApplicationRepositoryDelete(ctx, projectKey, appName, app.VCSServer, app.RepositoryFullname, u)
