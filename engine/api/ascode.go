@@ -11,6 +11,7 @@ import (
 	"github.com/ovh/cds/engine/api/ascode/sync"
 	"github.com/ovh/cds/engine/api/event"
 	"github.com/ovh/cds/engine/api/operation"
+	"github.com/ovh/cds/engine/api/permission"
 	"github.com/ovh/cds/engine/api/project"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
 	"github.com/ovh/cds/engine/api/workflow"
@@ -181,10 +182,20 @@ func (api *API) postPerformImportAsCodeHandler() service.Handler {
 func (api *API) postResyncPRAsCodeHandler() service.Handler {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 		vars := mux.Vars(r)
-		projectKey := vars["permProjectKey"]
-
+		projectKey := vars["key"] // we want to manually check the projet permission, for this POST only read is required.
 		appName := FormString(r, "appName")
 		fromRepo := FormString(r, "repo")
+
+		perms, err := permission.LoadProjectMaxLevelPermission(ctx, api.mustDB(), []string{projectKey}, getAPIConsumer(ctx).GetGroupIDs())
+		if err != nil {
+			return sdk.WrapError(err, "cannot get max project permissions for %s", projectKey)
+		}
+
+		callerPermission := perms.Level(projectKey)
+		// If the caller based on its group doesn't have enough permission level
+		if callerPermission < sdk.PermissionRead && !isMaintainer(ctx) {
+			return sdk.WithStack(sdk.ErrNotFound)
+		}
 
 		proj, err := project.Load(api.mustDB(), api.Cache, projectKey,
 			project.LoadOptions.WithApplicationWithDeploymentStrategies,
