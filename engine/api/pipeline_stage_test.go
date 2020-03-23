@@ -18,8 +18,10 @@ import (
 
 func deleteAll(t *testing.T, api *API, key string) {
 	t.Logf("start deleted : %s", key)
-	proj, err := project.Load(api.mustDB(), api.Cache, key, project.LoadOptions.WithGroups)
-	require.NoError(t, err)
+	proj, _ := project.Load(api.mustDB(), api.Cache, key, project.LoadOptions.WithGroups)
+	if proj == nil {
+		return
+	}
 
 	// Delete all apps
 	apps, err := application.LoadAll(context.TODO(), api.mustDB(), proj.ID)
