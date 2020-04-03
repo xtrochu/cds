@@ -52,6 +52,10 @@ func (s *Service) generatePayloadFromGithubRequest(ctx context.Context, t *sdk.T
 	getPayloadFromRepository(payload, request.Repository)
 	getPayloadFromCommit(payload, request.HeadCommit)
 
+	payload[CDS_TRIGGERED_BY_USERNAME] = request.Pusher.Name
+	payload[CDS_TRIGGERED_BY_FULLNAME] = request.Pusher.Name
+	payload[CDS_TRIGGERED_BY_EMAIL] = request.Pusher.Email
+
 	if len(request.Commits) > 0 {
 		payload[GIT_MESSAGE] = request.Commits[0].Message
 	}
@@ -79,7 +83,4 @@ func getPayloadFromCommit(payload map[string]interface{}, commit *GithubCommit) 
 	}
 	payload[GIT_AUTHOR] = commit.Author.Username
 	payload[GIT_AUTHOR_EMAIL] = commit.Author.Email
-	payload[CDS_TRIGGERED_BY_USERNAME] = commit.Author.Username
-	payload[CDS_TRIGGERED_BY_FULLNAME] = commit.Author.Name
-	payload[CDS_TRIGGERED_BY_EMAIL] = commit.Author.Email
 }

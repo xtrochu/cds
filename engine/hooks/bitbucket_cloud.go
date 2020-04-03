@@ -88,7 +88,6 @@ func getVariableFromBitbucketCloudAuthor(payload map[string]interface{}, actor *
 	if actor == nil {
 		return
 	}
-	payload[GIT_AUTHOR] = actor.DisplayName
 	payload[CDS_TRIGGERED_BY_USERNAME] = actor.Username
 	payload[CDS_TRIGGERED_BY_FULLNAME] = actor.DisplayName
 }
