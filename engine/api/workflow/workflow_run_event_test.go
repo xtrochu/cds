@@ -369,7 +369,7 @@ func TestResyncCommitStatusCommentPRNotTerminated(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	assert.NoError(t, application.Insert(db, cache, *proj, &app))
+	assert.NoError(t, application.Insert(db, cache, proj.ID, &app))
 	assert.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
