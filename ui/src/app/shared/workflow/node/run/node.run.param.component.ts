@@ -100,7 +100,7 @@ export class WorkflowNodeRunParamComponent implements AfterViewInit {
             return;
         }
         this.open = true;
-        this.nodeToRun = this._store.selectSnapshot(WorkflowState.nodeSnapshot);
+        this.nodeToRun = cloneDeep(this._store.selectSnapshot(WorkflowState.nodeSnapshot));
         this.currentNodeRun = this._store.selectSnapshot(WorkflowState.nodeRunSnapshot);
         this.currentWorkflowRun = this._store.selectSnapshot(WorkflowState.workflowRunSnapshot);
         this.workflow = this._store.selectSnapshot(WorkflowState.workflowSnapshot);
@@ -109,6 +109,11 @@ export class WorkflowNodeRunParamComponent implements AfterViewInit {
         if (this.currentNodeRun && this.currentNodeRun.workflow_node_id !== this.nodeToRun.id) {
             delete this.currentNodeRun;
         }
+
+        if (!this.nodeToRun) {
+            this.nodeToRun = this.workflow.workflow_data.node;
+        }
+
         this.updateDefaultPipelineParameters();
         if (this.nodeToRun && this.nodeToRun.context) {
             // TODO fix condition when optinal chaining (? operator) when angular 9
@@ -136,7 +141,6 @@ export class WorkflowNodeRunParamComponent implements AfterViewInit {
             }
         }
         this.num = num;
-
 
         // if the pipeline was already launched, we refresh data from API
         // relaunch a workflow or a pipeline
@@ -322,7 +326,7 @@ export class WorkflowNodeRunParamComponent implements AfterViewInit {
             if (this.nodeToRun.context) {
                 this.parameters = Pipeline.mergeParams(
                     cloneDeep(pipToRun.parameters),
-                    this.nodeToRun.context.default_pipeline_parameters
+                    cloneDeep(this.nodeToRun.context.default_pipeline_parameters)
                 );
             } else {
                 this.nodeToRun.context = new WNodeContext();
@@ -338,6 +342,8 @@ export class WorkflowNodeRunParamComponent implements AfterViewInit {
                 return;
             }
         }
+        this.loading = true;
+        this._cd.detectChanges();
         let request = new WorkflowRunRequest();
         request.manual = new WorkflowNodeRunManual();
         request.manual.resync = resync;
@@ -354,9 +360,10 @@ export class WorkflowNodeRunParamComponent implements AfterViewInit {
             request.number = this.num;
         }
 
-        this.loading = true;
+
         this._workflowRunService.runWorkflow(this.projectKey, this.workflow.name, request).pipe(finalize(() => {
             this.loading = false;
+            this._cd.markForCheck();
         })).subscribe(wr => {
             this.modal.approve(true);
             this._router.navigate(['/project', this.projectKey, 'workflow', this.workflow.name, 'run', wr.num],

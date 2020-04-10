@@ -43,7 +43,7 @@ func processNodeTriggers(ctx context.Context, db gorp.SqlExecutor, store cache.S
 					Type: sdk.MsgWorkflowError.Type,
 				})
 			}
-			_, _ = report.Merge(ctx, r1, nil)
+			report.Merge(ctx, r1)
 			continue
 		}
 	}
@@ -83,25 +83,25 @@ func processNodeRun(ctx context.Context, db gorp.SqlExecutor, store cache.Store,
 
 	switch n.Type {
 	case sdk.NodeTypeFork, sdk.NodeTypePipeline, sdk.NodeTypeJoin:
-		r1, conditionOK, errT := processNode(ctx, db, store, proj, wr, mapNodes, n, subNumber, parentNodeRuns, hookEvent, manual)
+		r1, conditionOK, errT := processNode(ctx, db, store, proj, wr, n, subNumber, parentNodeRuns, hookEvent, manual)
 		if errT != nil {
 			return nil, false, sdk.WrapError(errT, "Unable to processNode")
 		}
-		report.Merge(ctx, r1, nil) // nolint
+		report.Merge(ctx, r1)
 		return report, conditionOK, nil
 	case sdk.NodeTypeOutGoingHook:
 		r1, conditionOK, errO := processNodeOutGoingHook(ctx, db, store, proj, wr, mapNodes, parentNodeRuns, n, subNumber, manual)
 		if errO != nil {
 			return nil, false, sdk.WrapError(errO, "Unable to processNodeOutGoingHook")
 		}
-		report.Merge(ctx, r1, nil) // nolint
+		report.Merge(ctx, r1)
 		return report, conditionOK, nil
 	}
 	return nil, false, nil
 }
 
 func processNode(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, wr *sdk.WorkflowRun,
-	mapNodes map[int64]*sdk.Node, n *sdk.Node, subNumber int, parents []*sdk.WorkflowNodeRun,
+	n *sdk.Node, subNumber int, parents []*sdk.WorkflowNodeRun,
 	hookEvent *sdk.WorkflowNodeRunHookEvent, manual *sdk.WorkflowNodeRunManual) (*ProcessorReport, bool, error) {
 	report := new(ProcessorReport)
 
@@ -361,7 +361,7 @@ func processNode(ctx context.Context, db gorp.SqlExecutor, store cache.Store, pr
 			or
 			(workflow_node_run.id <> $2 and workflow_node_run.status = $5)
 		)`
-		nbMutex, err := db.SelectInt(mutexQuery, n.WorkflowID, nr.ID, n.Name, string(sdk.StatusWaiting), string(sdk.StatusBuilding))
+		nbMutex, err := db.SelectInt(mutexQuery, n.WorkflowID, nr.ID, n.Name, sdk.StatusWaiting, sdk.StatusBuilding)
 		if err != nil {
 			return nil, false, sdk.WrapError(err, "unable to check mutexes")
 		}
@@ -388,7 +388,7 @@ func processNode(ctx context.Context, db gorp.SqlExecutor, store cache.Store, pr
 	if err != nil {
 		return nil, false, sdk.WrapError(err, "unable to execute workflow run")
 	}
-	_, _ = report.Merge(ctx, r1, nil)
+	report.Merge(ctx, r1)
 	return report, true, nil
 }
 

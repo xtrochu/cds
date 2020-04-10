@@ -57,9 +57,19 @@ export class GetWorkflowNodeRun {
     constructor(public payload: { projectKey: string, workflowName: string, num: number, nodeRunID: number }) { }
 }
 
+export class SelectWorkflowNode {
+    static readonly type = '[Workflow] Select Workflow Node';
+    constructor(public payload: { node: WNode }) { }
+}
+
 export class SelectWorkflowNodeRun {
     static readonly type = '[Workflow] Select Workflow Node Run';
     constructor(public payload: { workflowNodeRun: WorkflowNodeRun, node: WNode }) { }
+}
+
+export class SelectWorkflowNodeRunJob {
+    static readonly type = '[Workflow] Select Workflow Node Job Run';
+    constructor(public payload: { jobID: number}) { }
 }
 
 export class UpdateWorkflowRunList {

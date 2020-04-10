@@ -36,6 +36,7 @@ func syncJobInNodeRun(n *sdk.WorkflowNodeRun, j *sdk.WorkflowNodeJobRun, stageIn
 			rj.Job = j.Job
 			rj.Header = j.Header
 			rj.Parameters = j.Parameters
+			rj.SpawnInfos = j.SpawnInfos
 		}
 	}
 }
@@ -43,8 +44,6 @@ func syncJobInNodeRun(n *sdk.WorkflowNodeRun, j *sdk.WorkflowNodeJobRun, stageIn
 func syncTakeJobInNodeRun(ctx context.Context, db gorp.SqlExecutor, n *sdk.WorkflowNodeRun, j *sdk.WorkflowNodeJobRun, stageIndex int) (*ProcessorReport, error) {
 	_, end := observability.Span(ctx, "workflow.syncTakeJobInNodeRun")
 	defer end()
-
-	log.Debug("workflow.syncTakeJobInNodeRun> job parameters= %+v", j.Parameters)
 
 	report := new(ProcessorReport)
 
@@ -70,6 +69,8 @@ func syncTakeJobInNodeRun(ctx context.Context, db gorp.SqlExecutor, n *sdk.Workf
 			rj.Model = j.Model
 			rj.ModelType = j.ModelType
 			rj.ContainsService = j.ContainsService
+			rj.WorkerName = j.WorkerName
+			rj.HatcheryName = j.HatcheryName
 			rj.Job = j.Job
 			rj.Header = j.Header
 			rj.Parameters = j.Parameters
@@ -175,7 +176,7 @@ func executeNodeRun(ctx context.Context, db gorp.SqlExecutor, store cache.Store,
 				//Insert data in workflow_node_run_job
 				log.Debug("workflow.executeNodeRun> stage %s call addJobsToQueue", stage.Name)
 				r, err := addJobsToQueue(ctx, db, stage, wr, nr, &previousStage)
-				report, err = report.Merge(ctx, r, err)
+				report.Merge(ctx, r)
 				if err != nil {
 					return report, err
 				}
@@ -280,7 +281,7 @@ func executeNodeRun(ctx context.Context, db gorp.SqlExecutor, store cache.Store,
 	//Reload the workflow
 	updatedWorkflowRun, err := LoadRunByID(db, nr.WorkflowRunID, LoadRunOptions{})
 	if err != nil {
-		return nil, sdk.WrapError(err, "Unable to reload workflow run id=%d", nr.WorkflowRunID)
+		return nil, sdk.WrapError(err, "unable to reload workflow run id=%d", nr.WorkflowRunID)
 	}
 
 	// If pipeline build succeed, reprocess the workflow (in the same transaction)
@@ -289,14 +290,14 @@ func executeNodeRun(ctx context.Context, db gorp.SqlExecutor, store cache.Store,
 		if nr.Status != sdk.StatusStopped {
 			r1, _, err := processWorkflowDataRun(ctx, db, store, proj, updatedWorkflowRun, nil, nil, nil)
 			if err != nil {
-				return nil, sdk.WrapError(err, "Unable to reprocess workflow !")
+				return nil, sdk.WrapError(err, "unable to reprocess workflow")
 			}
-			report, _ = report.Merge(ctx, r1, nil)
+			report.Merge(ctx, r1)
 		}
 
 		//Delete the line in workflow_node_run_job
 		if err := DeleteNodeJobRuns(db, nr.ID); err != nil {
-			return nil, sdk.WrapError(err, "Unable to delete node %d job runs ", nr.ID)
+			return nil, sdk.WrapError(err, "unable to delete node %d job runs", nr.ID)
 		}
 
 		var hasMutex bool
@@ -354,14 +355,14 @@ func executeNodeRun(ctx context.Context, db gorp.SqlExecutor, store cache.Store,
 			})
 
 			if err := UpdateWorkflowRun(ctx, db, workflowRun); err != nil {
-				return nil, sdk.WrapError(err, "Unable to update workflow run %d after mutex release", workflowRun.ID)
+				return nil, sdk.WrapError(err, "unable to update workflow run %d after mutex release", workflowRun.ID)
 			}
 
 			log.Debug("workflow.execute> process the node run %d because mutex has been released", waitingRun.ID)
 			r, err := executeNodeRun(ctx, db, store, proj, waitingRun)
-			report, err = report.Merge(ctx, r, err)
+			report.Merge(ctx, r)
 			if err != nil {
-				return nil, sdk.WrapError(err, "Unable to reprocess workflow")
+				return nil, sdk.WrapError(err, "unable to reprocess workflow")
 			}
 
 			next()
@@ -535,7 +536,7 @@ jobLoop:
 		}
 		next()
 
-		if err := AddSpawnInfosNodeJobRun(db, wjob.ID, PrepareSpawnInfos(wjob.SpawnInfos)); err != nil {
+		if err := AddSpawnInfosNodeJobRun(db, wjob.WorkflowNodeRunID, wjob.ID, PrepareSpawnInfos(wjob.SpawnInfos)); err != nil {
 			return nil, sdk.WrapError(err, "cannot save spawn info job %d", wjob.ID)
 		}
 
@@ -635,6 +636,9 @@ func syncStage(ctx context.Context, db gorp.SqlExecutor, store cache.Store, stag
 				runJob.ModelType = runJobDB.ModelType
 				runJob.ContainsService = runJobDB.ContainsService
 				runJob.Job = runJobDB.Job
+				runJob.Model = runJobDB.Model
+				runJob.WorkerName = runJobDB.WorkerName
+				runJob.HatcheryName = runJobDB.HatcheryName
 			}
 		}
 	}
@@ -777,8 +781,8 @@ func stopWorkflowNodePipeline(ctx context.Context, dbFunc func() *gorp.DbMap, st
 	chanErr := make(chan error, stopWorkflowNodeRunNBWorker)
 	for i := 0; i < stopWorkflowNodeRunNBWorker && i < len(ids); i++ {
 		go func() {
-			//since report is mutable and is a pointer and in this case we can't have any error, we can skip returned values
-			_, _ = report.Merge(ctx, stopWorkflowNodeJobRun(ctx, dbFunc, store, proj, stopInfos, chanNjrID, chanErr, chanNodeJobRunDone, &wg), nil)
+			r := stopWorkflowNodeJobRun(ctx, dbFunc, store, proj, stopInfos, chanNjrID, chanErr, chanNodeJobRunDone, &wg)
+			report.Merge(ctx, r)
 		}()
 	}
 
@@ -864,12 +868,11 @@ func StopWorkflowNodeRun(ctx context.Context, dbFunc func() *gorp.DbMap, store c
 	if nodeRun.OutgoingHook != nil {
 		errS = stopWorkflowNodeOutGoingHook(ctx, dbFunc, &nodeRun)
 	}
-
 	if errS != nil {
-		return report, sdk.WrapError(errS, "Unable to stop workflow node run")
+		return report, sdk.WrapError(errS, "unable to stop workflow node run")
 	}
 
-	report.Merge(ctx, r1, nil) // nolint
+	report.Merge(ctx, r1)
 	report.Add(ctx, nodeRun)
 
 	return report, nil
@@ -930,7 +933,7 @@ func stopWorkflowNodeJobRun(ctx context.Context, dbFunc func() *gorp.DbMap, stor
 			return report
 		}
 
-		if err := AddSpawnInfosNodeJobRun(tx, njr.ID, []sdk.SpawnInfo{stopInfos}); err != nil {
+		if err := AddSpawnInfosNodeJobRun(tx, njr.WorkflowNodeRunID, njr.ID, []sdk.SpawnInfo{stopInfos}); err != nil {
 			chanErr <- sdk.WrapError(err, "Cannot save spawn info job %d", njr.ID)
 			tx.Rollback()
 			wg.Done()
@@ -939,15 +942,16 @@ func stopWorkflowNodeJobRun(ctx context.Context, dbFunc func() *gorp.DbMap, stor
 
 		njr.SpawnInfos = append(njr.SpawnInfos, stopInfos)
 		r, err := UpdateNodeJobRunStatus(ctx, tx, store, proj, njr, sdk.StatusStopped)
-		if _, err := report.Merge(ctx, r, err); err != nil {
-			chanErr <- sdk.WrapError(err, "Cannot update node job run")
+		report.Merge(ctx, r)
+		if err != nil {
+			chanErr <- sdk.WrapError(err, "cannot update node job run")
 			tx.Rollback()
 			wg.Done()
 			return report
 		}
 
 		if err := tx.Commit(); err != nil {
-			chanErr <- sdk.WrapError(err, "Cannot commit transaction")
+			chanErr <- sdk.WrapError(err, "cannot commit transaction")
 			tx.Rollback()
 			wg.Done()
 			return report

@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 
+	"github.com/ovh/cds/engine/api/notification"
+
 	"github.com/go-gorp/gorp"
 
 	"github.com/ovh/cds/engine/api/cache"
@@ -41,14 +43,20 @@ func WorkflowSendEvent(ctx context.Context, db gorp.SqlExecutor, store cache.Sto
 		}
 
 		nr, err := workflow.LoadNodeRunByID(db, wnr.ID, workflow.LoadRunOptions{
-			DisableDetailledNodeRun: true,
+			DisableDetailledNodeRun: false, // load build parameters, used in notif interpolate below
 		})
 		if err != nil {
 			log.Warning(ctx, "workflowSendEvent > Cannot load workflow node run: %v", err)
 			continue
 		}
 
-		event.PublishWorkflowNodeRun(ctx, db, store, *nr, wr.Workflow, &previousNodeRun)
+		workDB, err := workflow.LoadWorkflowFromWorkflowRunID(db, wr.ID)
+		if err != nil {
+			log.Warning(ctx, "WorkflowSendEvent> Unable to load workflow for event: %v", err)
+			continue
+		}
+		eventsNotif := notification.GetUserWorkflowEvents(ctx, db, store, wr.Workflow.ProjectID, wr.Workflow.ProjectKey, workDB.Name, wr.Workflow.Notifications, &previousNodeRun, *nr)
+		event.PublishWorkflowNodeRun(ctx, *nr, wr.Workflow, eventsNotif)
 		e := &workflow.VCSEventMessenger{}
 		if err := e.SendVCSEvent(ctx, db, store, proj, *wr, wnr); err != nil {
 			log.Warning(ctx, "WorkflowSendEvent> Cannot send vcs notification")
