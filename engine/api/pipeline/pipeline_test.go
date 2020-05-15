@@ -152,7 +152,7 @@ func TestLoadByWorkflowID(t *testing.T) {
 		Name:      "my-app",
 		ProjectID: proj.ID,
 	}
-	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 
 	pip := sdk.Pipeline{
 		ProjectID:  proj.ID,

@@ -181,13 +181,11 @@ func TestLoadByWorkflowID(t *testing.T) {
 
 	require.NoError(t, workflow.Insert(context.TODO(), db, cache, *proj, &w))
 
-	actuals, err := application.LoadByWorkflowID(db, w.ID)
-	assert.NoError(t, err)
-
-	assert.Equal(t, 1, len(actuals))
+	actuals, err := application.LoadByWorkflowID(context.TODO(), db, w.ID)
+	require.NoError(t, err)
+	require.Len(t, actuals, 1)
 	assert.Equal(t, app.Name, actuals[0].Name)
 	assert.Equal(t, proj.ID, actuals[0].ProjectID)
-
 }
 
 func TestWithRepositoryStrategy(t *testing.T) {
@@ -202,7 +200,7 @@ func TestWithRepositoryStrategy(t *testing.T) {
 		ProjectKey: proj.Key,
 		ProjectID:  proj.ID,
 	}
-	require.NoError(t, application.Insert(db, *proj, app))
+	require.NoError(t, application.Insert(db, proj.ID, app))
 
 	app.RepositoryStrategy = sdk.RepositoryStrategy{
 		Branch:         "{{.git.branch}}",
@@ -213,25 +211,25 @@ func TestWithRepositoryStrategy(t *testing.T) {
 		SSHKeyContent:  "content",
 	}
 
-	require.NoError(t, application.Update(db, app))
+	require.NoError(t, application.Update(context.TODO(), db, app))
 	require.Equal(t, "user", app.RepositoryStrategy.User)
 	require.Equal(t, sdk.PasswordPlaceholder, app.RepositoryStrategy.Password)
 	require.Equal(t, "", app.RepositoryStrategy.SSHKeyContent) // it depends on the connection type
 
 	var err error
 
-	app, err = application.LoadByID(db, app.ID)
+	app, err = application.LoadByID(context.TODO(), db, app.ID)
 	require.NoError(t, err)
 	app.RepositoryStrategy.Password = "password2"
-	require.NoError(t, application.Update(db, app))
+	require.NoError(t, application.Update(context.TODO(), db, app))
 
-	app, err = application.LoadByIDWithClearVCSStrategyPassword(db, app.ID)
+	app, err = application.LoadByIDWithClearVCSStrategyPassword(context.TODO(), db, app.ID)
 	require.NoError(t, err)
 	require.Equal(t, "user", app.RepositoryStrategy.User)
 	require.Equal(t, "password2", app.RepositoryStrategy.Password)
 	require.Equal(t, "", app.RepositoryStrategy.SSHKeyContent) // it depends on the connection type
 
-	app, err = application.LoadByID(db, app.ID)
+	app, err = application.LoadByID(context.TODO(), db, app.ID)
 	require.NoError(t, err)
 	require.Equal(t, "user", app.RepositoryStrategy.User)
 	require.Equal(t, sdk.PasswordPlaceholder, app.RepositoryStrategy.Password)
@@ -241,7 +239,7 @@ func TestWithRepositoryStrategy(t *testing.T) {
 	app.RepositoryStrategy.SSHKeyContent = "ssh_key"
 	app.RepositoryStrategy.SSHKey = "ssh_key"
 
-	require.NoError(t, application.Update(db, app))
+	require.NoError(t, application.Update(context.TODO(), db, app))
 	require.Equal(t, "user", app.RepositoryStrategy.User)
 	require.Equal(t, sdk.PasswordPlaceholder, app.RepositoryStrategy.Password)
 	require.Equal(t, "", app.RepositoryStrategy.SSHKeyContent) // it depends on the connection type

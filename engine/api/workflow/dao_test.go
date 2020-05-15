@@ -162,7 +162,7 @@ func TestInsertSimpleWorkflowWithApplicationAndEnv(t *testing.T) {
 		ProjectID: proj.ID,
 		Name:      "app1",
 	}
-	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 
 	env := sdk.Environment{
 		ProjectID:  proj.ID,
@@ -524,13 +524,13 @@ func TestUpdateSimpleWorkflowWithApplicationEnvPipelineParametersAndPayload(t *t
 		ProjectID: proj.ID,
 		Name:      "app1",
 	}
-	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 
 	app2 := sdk.Application{
 		ProjectID: proj.ID,
 		Name:      "app2",
 	}
-	require.NoError(t, application.Insert(db, cache, proj.ID, &app2))
+	require.NoError(t, application.Insert(db, proj.ID, &app2))
 
 	env := sdk.Environment{
 		ProjectID:  proj.ID,

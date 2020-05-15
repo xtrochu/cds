@@ -102,7 +102,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testi
 	app := &sdk.Application{
 		Name: "myNewApp",
 	}
-	require.NoError(t, application.Insert(db, api.Cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, proj.ID, app))
 
 	k := &sdk.ApplicationKey{
 		Name:          "app-mykey",
@@ -211,7 +211,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	app := &sdk.Application{
 		Name: "myNewApp",
 	}
-	require.NoError(t, application.Insert(db, api.Cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, proj.ID, app))
 
 	k := &sdk.ApplicationKey{
 		Name:          "app-mykey",
@@ -375,7 +375,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	app := &sdk.Application{
 		Name: "myNewApp",
 	}
-	require.NoError(t, application.Insert(db, api.Cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, proj.ID, app))
 
 	// create password, pgp and ssh keys
 	k1 := &sdk.ApplicationKey{
@@ -578,7 +578,7 @@ func Test_postApplicationImportHandler_ExistingAppFromYAMLWithoutForce(t *testin
 	app := sdk.Application{
 		Name: "myNewApp",
 	}
-	require.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 
 	//Prepare request
 	vars := map[string]string{
@@ -613,7 +613,7 @@ func Test_postApplicationImportHandler_ExistingAppFromYAMLInheritPermissions(t *
 	app := sdk.Application{
 		Name: "myNewApp",
 	}
-	require.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 
 	//Prepare request
 	vars := map[string]string{
@@ -674,7 +674,7 @@ func Test_postApplicationImportHandler_ExistingAppWithDeploymentStrategy(t *test
 	app := sdk.Application{
 		Name: "myNewApp",
 	}
-	require.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 
 	require.NoError(t, application.SetDeploymentStrategy(db, proj.ID, app.ID, pf.ID, pp.Name, sdk.IntegrationConfig{
 		"token": sdk.IntegrationConfigValue{
@@ -786,7 +786,7 @@ func Test_postApplicationImportHandler_DontOverrideDeploymentPasswordIfNotGiven(
 	app := sdk.Application{
 		Name: "myNewApp",
 	}
-	require.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 
 	require.NoError(t, application.SetDeploymentStrategy(db, proj.ID, app.ID, pf.ID, pp.Name, sdk.IntegrationConfig{
 		"token": sdk.IntegrationConfigValue{

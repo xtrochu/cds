@@ -23,7 +23,7 @@ func Test_getApplicationExportHandler(t *testing.T) {
 	app := &sdk.Application{
 		Name: appName,
 	}
-	require.NoError(t, application.Insert(db, api.Cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, proj.ID, app))
 
 	v1 := sdk.Variable{
 		Name:  "var1",

@@ -1852,7 +1852,7 @@ func Test_getWorkflowsHandler_FilterByRepo(t *testing.T) {
 		Name:               sdk.RandomString(10),
 		RepositoryFullname: "ovh/" + repofullName,
 	}
-	require.NoError(t, application.Insert(api.mustDB(), *proj, app))
+	require.NoError(t, application.Insert(api.mustDB(), proj.ID, app))
 
 	pip := sdk.Pipeline{
 		ProjectID:  proj.ID,

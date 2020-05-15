@@ -61,7 +61,7 @@ func TestLoadAllByRepo(t *testing.T) {
 		Key:  sdk.RandomString(10),
 		Name: sdk.RandomString(10),
 	}
-	require.NoError(t, project.Insert(db, cache, proj))
+	require.NoError(t, project.Insert(db, proj))
 
 	g := assets.InsertGroup(t, db)
 	require.NoError(t, group.InsertLinkGroupProject(context.TODO(), db, &group.LinkGroupProject{
@@ -74,9 +74,9 @@ func TestLoadAllByRepo(t *testing.T) {
 		Name:               sdk.RandomString(10),
 		RepositoryFullname: "ovh/cds",
 	}
-	test.NoError(t, application.Insert(db, cache, proj.ID, app))
+	test.NoError(t, application.Insert(db, proj.ID, app))
 
-	projs, err := project.LoadAllByRepoAndGroupIDs(context.TODO(), db, cache, []int64{g.ID}, "ovh/cds")
+	projs, err := project.LoadAllByRepoAndGroupIDs(context.TODO(), db, []int64{g.ID}, "ovh/cds")
 	require.NoError(t, err)
 	require.Len(t, projs, 1)
 	assert.Equal(t, proj.ID, projs[0].ID)

@@ -70,7 +70,7 @@ func TestImport(t *testing.T) {
 	app := &sdk.Application{
 		Name: sdk.RandomString(10),
 	}
-	require.NoError(t, application.Insert(db, cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, proj.ID, app))
 
 	//Environment
 	envName := sdk.RandomString(10)

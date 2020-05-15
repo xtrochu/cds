@@ -1020,7 +1020,7 @@ func TestWorkerPrivateKey(t *testing.T) {
 		ProjectID: proj.ID,
 		Name:      sdk.RandomString(10),
 	}
-	assert.NoError(t, application.Insert(db, *proj, &app))
+	assert.NoError(t, application.Insert(db, proj.ID, &app))
 
 	// Create workflow
 	w := sdk.Workflow{

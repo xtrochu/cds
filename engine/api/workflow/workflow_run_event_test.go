@@ -50,7 +50,7 @@ func TestResyncCommitStatusNotifDisabled(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
@@ -148,7 +148,7 @@ func TestResyncCommitStatusSetStatus(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
@@ -252,7 +252,7 @@ func TestResyncCommitStatusCommentPR(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
@@ -370,7 +370,7 @@ func TestResyncCommitStatusCommentPRNotTerminated(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
@@ -479,7 +479,7 @@ func TestResyncCommitStatusCommitCache(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
