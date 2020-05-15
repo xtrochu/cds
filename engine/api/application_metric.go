@@ -20,7 +20,7 @@ func (api *API) getApplicationMetricHandler() service.Handler {
 		appName := vars["applicationName"]
 		metricName := vars["metricName"]
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}

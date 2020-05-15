@@ -12,17 +12,13 @@ import (
 
 // Export an application
 func Export(ctx context.Context, db gorp.SqlExecutor, projectID int64, appName string, encryptFunc sdk.EncryptFunc) (exportentities.Application, error) {
-	app, err := LoadByProjectIDAndName(ctx, db, projectID, appName,
+	app, err := LoadByProjectIDAndNameWithClearVCSStrategyPassword(ctx, db, projectID, appName,
 		LoadOptions.WithVariablesWithClearPassword,
 		LoadOptions.WithClearKeys,
 		LoadOptions.WithClearDeploymentStrategies,
 	)
 	if err != nil {
 		return exportentities.Application{}, sdk.WrapError(err, "cannot load application %s", appName)
-	}
-
-	if err := DecryptVCSStrategyPassword(app); err != nil {
-		return exportentities.Application{}, sdk.WrapError(err, "cannot decrypt vcs password")
 	}
 
 	return ExportApplication(db, *app, encryptFunc)

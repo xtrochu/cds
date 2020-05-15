@@ -7,13 +7,12 @@ import (
 
 	"github.com/go-gorp/gorp"
 
-	"github.com/ovh/cds/engine/api/cache"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
 	"github.com/ovh/cds/sdk"
 )
 
 //Import is able to create a new application and all its components
-func Import(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, app *sdk.Application, repomanager string, u sdk.Identifiable, msgChan chan<- sdk.Message) error {
+func Import(ctx context.Context, db gorp.SqlExecutor, proj sdk.Project, app *sdk.Application, repomanager string, u sdk.Identifiable, msgChan chan<- sdk.Message) error {
 	doUpdate, erre := Exists(db, proj.Key, app.Name)
 	if erre != nil {
 		return sdk.WrapError(erre, "application.Import> Unable to check if application exists")
@@ -28,17 +27,17 @@ func Import(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 	}
 
 	if doUpdate {
-		oldApp, errlo := LoadByProjectIDAndName(ctx, db, proj.ID, app.Name,
+		oldApp, err := LoadByProjectIDAndName(ctx, db, proj.ID, app.Name,
 			LoadOptions.WithKeys,
 			LoadOptions.WithVariablesWithClearPassword,
 			LoadOptions.WithClearDeploymentStrategies,
 		)
-		if errlo != nil {
-			return sdk.WrapError(errlo, "application.Import> Unable to load application by name: %s", app.Name)
+		if err != nil {
+			return sdk.WrapError(err, "unable to load application by name: %s", app.Name)
 		}
 
 		if err := DeleteVariablesByApplicationID(db, oldApp.ID); err != nil {
-			return sdk.WrapError(err, "Cannot delete application variable")
+			return sdk.WrapError(err, "cannot delete application variable")
 		}
 		if err := DeleteKeysByApplicationID(db, oldApp.ID); err != nil {
 			return sdk.WrapError(err, "application.Import")
@@ -48,7 +47,7 @@ func Import(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 		app.ID = oldApp.ID
 
 		//Save app in database
-		if err := Update(db, store, app); err != nil {
+		if err := Update(ctx, db, app); err != nil {
 			return sdk.WrapError(err, "Unable to update application")
 		}
 
@@ -57,8 +56,8 @@ func Import(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 		}
 	} else {
 		//Save application in database
-		if err := Insert(db, store, proj.ID, app); err != nil {
-			return sdk.WrapError(err, "application.Import")
+		if err := Insert(db, proj.ID, app); err != nil {
+			return err
 		}
 
 		if msgChan != nil {
@@ -66,7 +65,7 @@ func Import(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 		}
 	}
 
-	if err := importVariables(db, store, app, u, msgChan); err != nil {
+	if err := importVariables(db, app, u, msgChan); err != nil {
 		return err
 	}
 
@@ -76,7 +75,6 @@ func Import(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 		if repositoriesmanager.GetProjectVCSServer(proj, app.VCSServer) == nil {
 			return sdk.WithStack(sdk.ErrNoReposManager)
 		}
-
 		if err := repositoriesmanager.InsertForApplication(db, app, proj.Key); err != nil {
 			return err
 		}
@@ -89,7 +87,7 @@ func Import(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 			return sdk.WrapError(err, "Unable to insert key %s", k.Name)
 		}
 		if msgChan != nil {
-			msgChan <- sdk.NewMessage(sdk.MsgAppKeyCreated, strings.ToUpper(string(k.Type)), k.Name, app.Name)
+			msgChan <- sdk.NewMessage(sdk.MsgAppKeyCreated, strings.ToUpper(k.Type.String()), k.Name, app.Name)
 		}
 	}
 
@@ -112,7 +110,7 @@ func Import(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 }
 
 //importVariables is able to create variable on an existing application
-func importVariables(db gorp.SqlExecutor, store cache.Store, app *sdk.Application, u sdk.Identifiable, msgChan chan<- sdk.Message) error {
+func importVariables(db gorp.SqlExecutor, app *sdk.Application, u sdk.Identifiable, msgChan chan<- sdk.Message) error {
 	for i := range app.Variables {
 		newVar := &app.Variables[i]
 		if !sdk.IsInArray(newVar.Type, sdk.AvailableVariableType) {

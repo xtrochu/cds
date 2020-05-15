@@ -10,16 +10,23 @@ import (
 	"time"
 
 	"github.com/ovh/cds/engine/worker/pkg/workerruntime"
-
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
+	"gopkg.in/square/go-jose.v2"
 
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/cdsclient"
+	"github.com/ovh/cds/sdk/jws"
 	"github.com/ovh/cds/sdk/log"
 )
 
-// WorkerServerPort is name of environment variable set to local worker HTTP server port
-const WorkerServerPort = "CDS_EXPORT_PORT"
+const (
+	// WorkerServerPort is name of environment variable set to local worker HTTP server port
+	WorkerServerPort = "CDS_EXPORT_PORT"
+
+	// CDS API URL
+	CDSApiUrl = "CDS_API_URL"
+)
 
 type CurrentWorker struct {
 	id         string
@@ -27,8 +34,9 @@ type CurrentWorker struct {
 	basedir    afero.Fs
 	manualExit bool
 	logger     struct {
-		logChan chan sdk.Log
-		llist   *list.List
+		logChan    chan sdk.Log
+		llist      *list.List
+		stepLogger *logrus.Logger
 	}
 	httpPort int32
 	register struct {
@@ -42,6 +50,7 @@ type CurrentWorker struct {
 		params       []sdk.Parameter
 		secrets      []sdk.Variable
 		context      context.Context
+		signer       jose.Signer
 	}
 	status struct {
 		Name   string `json:"name"`
@@ -76,17 +85,57 @@ func (wk *CurrentWorker) Parameters() []sdk.Parameter {
 }
 
 func (wk *CurrentWorker) SendLog(ctx context.Context, level workerruntime.Level, s string) {
+	if wk.currentJob.wJob == nil {
+		log.Error(wk.GetContext(), "unable to send log: %s. Job is nil", s)
+		return
+	}
+	if err := wk.Blur(&s); err != nil {
+		log.Error(wk.GetContext(), "unable to blur log: %v", err)
+		return
+	}
+
 	jobID, _ := workerruntime.JobID(ctx)
 	stepOrder, err := workerruntime.StepOrder(ctx)
-	if !strings.HasSuffix(s, "\n") {
-		s += "\n"
+	if wk.logger.stepLogger == nil {
+		if !strings.HasSuffix(s, "\n") {
+			s += "\n"
+		}
+		if err != nil {
+			log.Error(ctx, "SendLog> %v", err)
+		}
+		if err := wk.sendLog(jobID, fmt.Sprintf("[%s] ", level)+s, stepOrder, false); err != nil {
+			log.Error(ctx, "SendLog> %v", err)
+		}
+		return
 	}
+
+	var logLevel logrus.Level
+	switch level {
+	case workerruntime.LevelDebug:
+		logLevel = logrus.DebugLevel
+	case workerruntime.LevelInfo:
+		logLevel = logrus.InfoLevel
+	case workerruntime.LevelWarn:
+		logLevel = logrus.WarnLevel
+	case workerruntime.LevelError:
+		logLevel = logrus.ErrorLevel
+	default:
+	}
+
+	dataToSign := log.Signature{
+		Worker: &log.SignatureWorker{
+			WorkerID:  wk.id,
+			StepOrder: int64(stepOrder),
+		},
+		JobID:     wk.currentJob.wJob.ID,
+		Timestamp: time.Now().UnixNano(),
+	}
+	signature, err := jws.Sign(wk.currentJob.signer, dataToSign)
 	if err != nil {
-		log.Error(ctx, "SendLog> %v", err)
+		log.Error(ctx, "unable to sign logs: %v", err)
 	}
-	if err := wk.sendLog(jobID, fmt.Sprintf("[%s] ", level)+s, stepOrder, false); err != nil {
-		log.Error(ctx, "SendLog> %v", err)
-	}
+	wk.logger.stepLogger.WithField(log.ExtraFieldSignature, signature).Log(logLevel, s)
+
 }
 
 func (wk *CurrentWorker) Name() string {
@@ -101,7 +150,7 @@ func (wk *CurrentWorker) BaseDir() afero.Fs {
 	return wk.basedir
 }
 
-func (w *CurrentWorker) Environ() []string {
+func (wk *CurrentWorker) Environ() []string {
 	env := os.Environ()
 	newEnv := []string{"CI=1"}
 	// filter technical env variables
@@ -116,10 +165,13 @@ func (w *CurrentWorker) Environ() []string {
 	newEnv = append(newEnv, "CDS_KEY=********")
 
 	// worker export http port
-	newEnv = append(newEnv, fmt.Sprintf("%s=%d", WorkerServerPort, w.HTTPPort()))
+	newEnv = append(newEnv, fmt.Sprintf("%s=%d", WorkerServerPort, wk.HTTPPort()))
+
+	// Api Endpoint in CDS_API_URL var
+	newEnv = append(newEnv, fmt.Sprintf("%s=%s", CDSApiUrl, wk.register.apiEndpoint))
 
 	//set up environment variables from pipeline build job parameters
-	for _, p := range w.currentJob.params {
+	for _, p := range wk.currentJob.params {
 		// avoid put private key in environment var as it's a binary value
 		if strings.HasPrefix(p.Name, "cds.key.") && strings.HasSuffix(p.Name, ".priv") {
 			continue
@@ -136,7 +188,7 @@ func (w *CurrentWorker) Environ() []string {
 		newEnv = append(newEnv, fmt.Sprintf("%s=%s", envName, p.Value))
 	}
 
-	for _, p := range w.currentJob.newVariables {
+	for _, p := range wk.currentJob.newVariables {
 		envName := strings.Replace(p.Name, ".", "_", -1)
 		envName = strings.Replace(envName, "-", "_", -1)
 		envName = strings.ToUpper(envName)

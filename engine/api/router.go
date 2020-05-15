@@ -41,6 +41,8 @@ var (
 	Hits                *stats.Int64Measure
 	SSEClients          *stats.Int64Measure
 	SSEEvents           *stats.Int64Measure
+	WebSocketClients    *stats.Int64Measure
+	WebSocketEvents     *stats.Int64Measure
 	ServerRequestCount  *stats.Int64Measure
 	ServerRequestBytes  *stats.Int64Measure
 	ServerResponseBytes *stats.Int64Measure
@@ -278,7 +280,6 @@ func (r *Router) handle(uri string, scope HandlerScope, handlers ...*service.Han
 		name = strings.Replace(name, ".func1", "", 1)
 		name = strings.Replace(name, ".1", "", 1)
 		name = strings.Replace(name, "github.com/ovh/cds/engine/", "", 1)
-		log.Debug("Registering handler %s on %s %s", name, handlers[i].Method, uri)
 		handlers[i].Name = name
 		cfg.Config[handlers[i].Method] = handlers[i]
 	}
@@ -412,7 +413,7 @@ func (r *Router) handle(uri string, scope HandlerScope, handlers ...*service.Han
 			ctx, err = m(ctx, responseWriter, req, rc)
 			if err != nil {
 				observability.Record(r.Background, Errors, 1)
-				service.WriteError(ctx, w, req, err)
+				service.WriteError(ctx, responseWriter, req, err)
 				deferFunc(ctx)
 				return
 			}

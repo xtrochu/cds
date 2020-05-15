@@ -35,7 +35,7 @@ func (api *API) getVariableAuditInApplicationHandler() service.Handler {
 		appName := vars["applicationName"]
 		varName := vars["name"]
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
@@ -66,7 +66,7 @@ func (api *API) getVariableInApplicationHandler() service.Handler {
 		appName := vars["applicationName"]
 		varName := vars["name"]
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
@@ -91,7 +91,7 @@ func (api *API) getVariablesInApplicationHandler() service.Handler {
 		projectKey := vars[permProjectKey]
 		appName := vars["applicationName"]
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
@@ -112,7 +112,7 @@ func (api *API) deleteVariableFromApplicationHandler() service.Handler {
 		appName := vars["applicationName"]
 		varName := vars["name"]
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
@@ -165,7 +165,7 @@ func (api *API) updateVariableInApplicationHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrWrongRequest)
 		}
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
@@ -219,7 +219,7 @@ func (api *API) addVariableInApplicationHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrWrongRequest)
 		}
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}

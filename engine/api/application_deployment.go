@@ -20,7 +20,7 @@ func (api *API) getApplicationDeploymentStrategiesConfigHandler() service.Handle
 		projectKey := vars[permProjectKey]
 		appName := vars["applicationName"]
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
@@ -53,7 +53,7 @@ func (api *API) postApplicationDeploymentStrategyConfigHandler() service.Handler
 		}
 		defer tx.Rollback() // nolint
 
-		proj, err := project.Load(tx, api.Cache, key, project.LoadOptions.WithIntegrations)
+		proj, err := project.Load(tx, key, project.LoadOptions.WithIntegrations)
 		if err != nil {
 			return sdk.WrapError(err, "unable to load project")
 		}
@@ -124,7 +124,7 @@ func (api *API) deleteApplicationDeploymentStrategyConfigHandler() service.Handl
 		}
 		defer tx.Rollback() // nolint
 
-		proj, err := project.Load(tx, api.Cache, key, project.LoadOptions.WithIntegrations)
+		proj, err := project.Load(tx, key, project.LoadOptions.WithIntegrations)
 		if err != nil {
 			return sdk.WrapError(err, "unable to load project")
 		}
@@ -195,7 +195,7 @@ func (api *API) getApplicationDeploymentStrategyConfigHandler() service.Handler 
 			opts = []application.LoadOptionFunc{application.LoadOptions.WithClearDeploymentStrategies}
 		}
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ovh/cds/engine/api/application"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
@@ -31,7 +32,7 @@ func TestResyncCommitStatusNotifDisabled(t *testing.T) {
 
 	pkey := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, pkey, pkey)
-	assert.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
+	require.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
 		Name: "gerrit",
 		Data: map[string]string{
 			"token":  "foo",
@@ -49,8 +50,8 @@ func TestResyncCommitStatusNotifDisabled(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	assert.NoError(t, application.Insert(db, cache, proj.ID, &app))
-	assert.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
 	wr := &sdk.WorkflowRun{
@@ -129,7 +130,7 @@ func TestResyncCommitStatusSetStatus(t *testing.T) {
 
 	pkey := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, pkey, pkey)
-	assert.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
+	require.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
 		Name: "gerrit",
 		Data: map[string]string{
 			"token":  "foo",
@@ -147,8 +148,8 @@ func TestResyncCommitStatusSetStatus(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	assert.NoError(t, application.Insert(db, cache, proj.ID, &app))
-	assert.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
 	wr := &sdk.WorkflowRun{
@@ -233,7 +234,7 @@ func TestResyncCommitStatusCommentPR(t *testing.T) {
 
 	pkey := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, pkey, pkey)
-	assert.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
+	require.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
 		Name: "gerrit",
 		Data: map[string]string{
 			"token":  "foo",
@@ -251,8 +252,8 @@ func TestResyncCommitStatusCommentPR(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	assert.NoError(t, application.Insert(db, cache, proj.ID, &app))
-	assert.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
 	fls := false
@@ -351,7 +352,7 @@ func TestResyncCommitStatusCommentPRNotTerminated(t *testing.T) {
 
 	pkey := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, pkey, pkey)
-	assert.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
+	require.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
 		Name: "gerrit",
 		Data: map[string]string{
 			"token":  "foo",
@@ -369,8 +370,8 @@ func TestResyncCommitStatusCommentPRNotTerminated(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	assert.NoError(t, application.Insert(db, cache, proj.ID, &app))
-	assert.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
 	fls := false
@@ -460,7 +461,7 @@ func TestResyncCommitStatusCommitCache(t *testing.T) {
 
 	pkey := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, pkey, pkey)
-	assert.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
+	require.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
 		Name: "gerrit",
 		Data: map[string]string{
 			"token":  "foo",
@@ -478,8 +479,8 @@ func TestResyncCommitStatusCommitCache(t *testing.T) {
 			ConnectionType: "ssh",
 		},
 	}
-	assert.NoError(t, application.Insert(db, cache, proj.ID, &app))
-	assert.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
 
 	tr := true
 	fls := false

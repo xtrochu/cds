@@ -18,26 +18,26 @@ import (
 )
 
 func TestInsertProject(t *testing.T) {
-	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
+	db, _, end := test.SetupPG(t, bootstrap.InitiliazeDB)
 	defer end()
-	project.Delete(db, cache, "key")
+	project.Delete(db, "key")
 
 	proj := sdk.Project{
 		Name: "test proj",
 		Key:  "key",
 	}
-	assert.NoError(t, project.Insert(db, cache, &proj))
+	assert.NoError(t, project.Insert(db, &proj))
 }
 
 func TestInsertProject_withWrongKey(t *testing.T) {
-	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
+	db, _, end := test.SetupPG(t, bootstrap.InitiliazeDB)
 	defer end()
 	proj := sdk.Project{
 		Name: "test proj",
 		Key:  "error key",
 	}
 
-	assert.Error(t, project.Insert(db, cache, &proj))
+	assert.Error(t, project.Insert(db, &proj))
 }
 
 func TestDelete(t *testing.T) {
@@ -86,8 +86,8 @@ func TestLoadAll(t *testing.T) {
 	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
 	defer end()
 
-	project.Delete(db, cache, "test_TestLoadAll1")
-	project.Delete(db, cache, "test_TestLoadAll2")
+	project.Delete(db, "test_TestLoadAll1")
+	project.Delete(db, "test_TestLoadAll2")
 
 	proj1 := &sdk.Project{
 		Key:  "test_TestLoadAll1",
@@ -97,13 +97,13 @@ func TestLoadAll(t *testing.T) {
 			"data2": "value2",
 		},
 	}
-	require.NoError(t, project.Insert(db, cache, proj1))
+	require.NoError(t, project.Insert(db, proj1))
 
 	proj2 := sdk.Project{
 		Key:  "test_TestLoadAll2",
 		Name: "test_TestLoadAll2",
 	}
-	require.NoError(t, project.Insert(db, cache, &proj2))
+	require.NoError(t, project.Insert(db, &proj2))
 
 	g := sdk.Group{Name: sdk.RandomString(10)}
 	require.NoError(t, group.Insert(context.TODO(), db, &g))
@@ -114,7 +114,7 @@ func TestLoadAll(t *testing.T) {
 		Role:      sdk.PermissionReadWriteExecute,
 	}))
 
-	proj1, _ = project.LoadByID(db, cache, proj1.ID, project.LoadOptions.WithGroups)
+	proj1, _ = project.LoadByID(db, proj1.ID, project.LoadOptions.WithGroups)
 
 	allProjects, err := project.LoadAll(nil, db, cache)
 	require.NoError(t, err)
@@ -143,6 +143,6 @@ func TestLoadAll(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ok)
 
-	assert.NoError(t, project.Delete(db, cache, "test_TestLoadAll1"))
-	assert.NoError(t, project.Delete(db, cache, "test_TestLoadAll2"))
+	assert.NoError(t, project.Delete(db, "test_TestLoadAll1"))
+	assert.NoError(t, project.Delete(db, "test_TestLoadAll2"))
 }

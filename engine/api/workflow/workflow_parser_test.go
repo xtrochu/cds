@@ -51,7 +51,7 @@ func TestParseAndImport(t *testing.T) {
 	app := &sdk.Application{
 		Name: sdk.RandomString(10),
 	}
-	test.NoError(t, application.Insert(db, cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, cache, proj.ID, app))
 
 	//Environment
 	envName := sdk.RandomString(10)
@@ -62,7 +62,7 @@ func TestParseAndImport(t *testing.T) {
 	test.NoError(t, environment.InsertEnvironment(db, env))
 
 	//Reload project
-	proj, _ = project.Load(db, cache, proj.Key, project.LoadOptions.WithApplications, project.LoadOptions.WithEnvironments, project.LoadOptions.WithPipelines)
+	proj, _ = project.Load(db, proj.Key, project.LoadOptions.WithApplications, project.LoadOptions.WithEnvironments, project.LoadOptions.WithPipelines)
 
 	input := v2.Workflow{
 		Name:    sdk.RandomString(10),
@@ -236,7 +236,7 @@ func TestParseAndImportFromRepository(t *testing.T) {
 		RepositoryFullname: "foo/myrepo",
 		VCSServer:          "github",
 	}
-	test.NoError(t, application.Insert(db, cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, cache, proj.ID, app))
 
 	//Environment
 	envName := sdk.RandomString(10)
@@ -247,7 +247,7 @@ func TestParseAndImportFromRepository(t *testing.T) {
 	test.NoError(t, environment.InsertEnvironment(db, env))
 
 	//Reload project
-	proj, _ = project.Load(db, cache, proj.Key, project.LoadOptions.WithApplications, project.LoadOptions.WithEnvironments, project.LoadOptions.WithPipelines)
+	proj, _ = project.Load(db, proj.Key, project.LoadOptions.WithApplications, project.LoadOptions.WithEnvironments, project.LoadOptions.WithPipelines)
 
 	input := v2.Workflow{
 		Name:    sdk.RandomString(10),

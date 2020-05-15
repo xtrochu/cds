@@ -49,7 +49,7 @@ func (api *API) postImportAsCodeHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrWrongRequest)
 		}
 
-		p, err := project.Load(api.mustDB(), api.Cache, key, project.LoadOptions.WithFeatures, project.LoadOptions.WithClearKeys)
+		p, err := project.Load(api.mustDB(), key, project.LoadOptions.WithClearKeys)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project")
 		}
@@ -112,12 +112,12 @@ func (api *API) postPerformImportAsCodeHandler() service.Handler {
 		uuid := vars["uuid"]
 
 		//Load project
-		proj, errp := project.Load(api.mustDB(), api.Cache, key,
+		proj, errp := project.Load(api.mustDB(), key,
 			project.LoadOptions.WithGroups,
 			project.LoadOptions.WithApplications,
 			project.LoadOptions.WithEnvironments,
 			project.LoadOptions.WithPipelines,
-			project.LoadOptions.WithFeatures,
+			project.LoadOptions.WithFeatures(api.Cache),
 			project.LoadOptions.WithClearIntegrations,
 		)
 		if errp != nil {
@@ -222,7 +222,7 @@ func (api *API) postResyncPRAsCodeHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrNotFound)
 		}
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey,
+		proj, err := project.Load(api.mustDB(), projectKey,
 			project.LoadOptions.WithApplicationWithDeploymentStrategies,
 			project.LoadOptions.WithPipelines,
 			project.LoadOptions.WithEnvironments,
@@ -240,7 +240,7 @@ func (api *API) postResyncPRAsCodeHandler() service.Handler {
 			}
 			app = *appP
 		case fromRepo != "":
-			wkf, err := workflow.LoadByRepo(ctx, api.Cache, api.mustDB(), *proj, fromRepo)
+			wkf, err := workflow.LoadByRepo(ctx, api.Cache, api.mustDB(), *proj, fromRepo, workflow.LoadOptions{})
 			if err != nil {
 				return err
 			}

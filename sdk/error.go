@@ -34,7 +34,6 @@ var (
 	ErrUnknownEnv                                    = Error{ID: 16, Status: http.StatusBadRequest}
 	ErrEnvironmentExist                              = Error{ID: 17, Status: http.StatusConflict}
 	ErrNoPipelineBuild                               = Error{ID: 18, Status: http.StatusNotFound}
-	ErrApplicationNotFound                           = Error{ID: 19, Status: http.StatusNotFound}
 	ErrInvalidUsername                               = Error{ID: 21, Status: http.StatusBadRequest}
 	ErrInvalidEmail                                  = Error{ID: 22, Status: http.StatusBadRequest}
 	ErrGroupPresent                                  = Error{ID: 23, Status: http.StatusBadRequest}
@@ -222,7 +221,6 @@ var errorsAmericanEnglish = map[int]string{
 	ErrUnknownEnv.ID:                                    "unknown environment",
 	ErrEnvironmentExist.ID:                              "environment already exists",
 	ErrNoPipelineBuild.ID:                               "this pipeline build does not exist",
-	ErrApplicationNotFound.ID:                           "application does not exist",
 	ErrInvalidUsername.ID:                               "invalid username",
 	ErrUsernamePresent.ID:                               "username already present",
 	ErrInvalidEmail.ID:                                  "invalid email",
@@ -376,8 +374,8 @@ var errorsAmericanEnglish = map[int]string{
 	ErrInvalidPassword.ID:                               "Your value of type password isn't correct",
 	ErrRepositoryUsedByHook.ID:                          "There is still a repository webhook on this repository",
 	ErrResourceNotInProject.ID:                          "The resource is not attached to the project",
-	ErrEnvironmentNotFound.ID:                           "environment not found",
-	ErrIntegrationtNotFound.ID:                          "integration not found",
+	ErrEnvironmentNotFound.ID:                           "Environment not found ",
+	ErrIntegrationtNotFound.ID:                          "Integration not found",
 	ErrSignupDisabled.ID:                                "Sign up is disabled for target consumer type",
 	ErrBadBrokerConfiguration.ID:                        "Cannot connect to the broker of your event integration. Check your configuration",
 	ErrInvalidJobRequirementNetworkAccess.ID:            "Invalid job requirement: network requirement must contains ':'. Example: golang.org:http, golang.org:443",
@@ -405,7 +403,6 @@ var errorsFrench = map[int]string{
 	ErrUnknownEnv.ID:                                    "environnement inconnu",
 	ErrEnvironmentExist.ID:                              "l'environnement existe",
 	ErrNoPipelineBuild.ID:                               "ce build n'existe pas",
-	ErrApplicationNotFound.ID:                           "l'application n'existe pas",
 	ErrInvalidUsername.ID:                               "nom d'utilisateur invalide",
 	ErrUsernamePresent.ID:                               "le nom d'utilisateur est déjà présent",
 	ErrInvalidEmail.ID:                                  "addresse email invalide",
@@ -559,7 +556,8 @@ var errorsFrench = map[int]string{
 	ErrInvalidPassword.ID:                               "Votre valeur de type mot de passe n'est pas correct",
 	ErrRepositoryUsedByHook.ID:                          "Il y a encore un repository webhook sur ce dépôt",
 	ErrResourceNotInProject.ID:                          "La ressource n'est pas lié au projet",
-	ErrEnvironmentNotFound.ID:                           "l'environnement n'existe pas",
+	ErrEnvironmentNotFound.ID:                           "L'environnement n'existe pas",
+	ErrIntegrationtNotFound.ID:                          "L'intégration n'existe pas",
 	ErrSignupDisabled.ID:                                "La création de compte est désactivée pour ce mode d'authentification.",
 	ErrBadBrokerConfiguration.ID:                        "Impossible de se connecter à votre intégration de type évènement. Veuillez vérifier votre configuration",
 	ErrInvalidJobRequirementNetworkAccess.ID:            "Pré-requis de job invalide: Le pré-requis network doit contenir un ':'. Exemple: golang.org:http, golang.org:443",
@@ -824,10 +822,12 @@ func WithStack(err error) error {
 	}
 }
 
-// ErrorWithData returns an error with data from given error.
-func ErrorWithData(err Error, data interface{}) error {
-	err.Data = data
-	return err
+// WithData returns an error with data from given error.
+func WithData(err error, data interface{}) error {
+	err = WithStack(err)
+	withStack := err.(errorWithStack)
+	withStack.httpError.Data = data
+	return withStack
 }
 
 // ExtractHTTPError tries to recognize given error and return http error

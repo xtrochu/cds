@@ -170,6 +170,10 @@ func CheckAndExecuteTemplate(ctx context.Context, db *gorp.DbMap, consumer sdk.A
 		}
 	}
 
+	if err := wt.CheckParams(req); err != nil {
+		return nil, err
+	}
+
 	var result exportentities.WorkflowComponents
 
 	if req.Detached {
@@ -198,22 +202,10 @@ func CheckAndExecuteTemplate(ctx context.Context, db *gorp.DbMap, consumer sdk.A
 	}
 	defer tx.Rollback() // nolint
 
-	var wti *sdk.WorkflowTemplateInstance
-
 	// try to get a instance not assign to a workflow but with the same slug
-	wtis, err := LoadInstancesByTemplateIDAndProjectIDAndRequestWorkflowName(ctx, tx, wt.ID, p.ID, req.WorkflowName)
-	if err != nil {
+	wti, err := LoadInstanceByTemplateIDAndProjectIDAndRequestWorkflowName(ctx, tx, wt.ID, p.ID, req.WorkflowName)
+	if err != nil && !sdk.ErrorIs(err, sdk.ErrNotFound) {
 		return nil, err
-	}
-	for _, res := range wtis {
-		if wti == nil {
-			wti = &res
-		} else {
-			// if there are more than one instance found, delete others
-			if err := DeleteInstance(tx, &res); err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	// if a previous instance exist for the same workflow update it, else create a new one
@@ -263,7 +255,7 @@ func CheckAndExecuteTemplate(ctx context.Context, db *gorp.DbMap, consumer sdk.A
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, sdk.WrapError(err, "cannot commit transaction")
+		return nil, sdk.WithStack(err)
 	}
 
 	// if the template was successfully executed we want to return only the a file with template instance data

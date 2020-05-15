@@ -24,6 +24,7 @@ import (
 	"github.com/ovh/cds/engine/api/keys"
 	"github.com/ovh/cds/engine/api/observability"
 	"github.com/ovh/cds/engine/api/pipeline"
+	"github.com/ovh/cds/engine/api/workflowtemplate"
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/log"
 )
@@ -71,6 +72,7 @@ type LoadOptions struct {
 	WithIcon              bool
 	WithAsCodeUpdateEvent bool
 	WithIntegrations      bool
+	WithTemplate          bool
 }
 
 // UpdateOptions is option to parse a workflow
@@ -99,19 +101,20 @@ func Exists(db gorp.SqlExecutor, key string, name string) (bool, error) {
 	return count > 0, nil
 }
 
-func LoadByRepo(ctx context.Context, store cache.Store, db gorp.SqlExecutor, proj sdk.Project, repo string) (*sdk.Workflow, error) {
+func LoadByRepo(ctx context.Context, store cache.Store, db gorp.SqlExecutor, proj sdk.Project, repo string, opts LoadOptions) (*sdk.Workflow, error) {
 	query := `
     SELECT workflow.*
     FROM workflow
-	JOIN project ON project.id = workflow.project_id
-    WHERE project.projectkey = $1 AND  workflow.from_repository = $2
-	LIMIT 1`
-	w, err := load(ctx, db, proj, LoadOptions{}, query, proj.Key, repo)
+	  JOIN project ON project.id = workflow.project_id
+    WHERE project.projectkey = $1 AND workflow.from_repository = $2
+    LIMIT 1
+  `
+	w, err := load(ctx, db, proj, opts, query, proj.Key, repo)
 	if err != nil {
 		return nil, err
 	}
 	if err := IsValid(ctx, store, db, w, proj, LoadOptions{}); err != nil {
-		return nil, sdk.WrapError(err, "Unable to valid workflow")
+		return nil, sdk.WrapError(err, "unable to validate workflow")
 	}
 	return w, nil
 }
@@ -121,7 +124,6 @@ func UpdateIcon(db gorp.SqlExecutor, workflowID int64, icon string) error {
 	if _, err := db.Exec("update workflow set icon = $1 where id = $2", icon, workflowID); err != nil {
 		return sdk.WrapError(err, "cannot update workflow icon for workflow id %d", workflowID)
 	}
-
 	return nil
 }
 
@@ -143,7 +145,6 @@ func UpdateFromRepository(db gorp.SqlExecutor, workflowID int64, fromRepository 
 	if _, err := db.Exec("UPDATE workflow SET from_repository = $1, last_modified = current_timestamp WHERE id = $2", fromRepository, workflowID); err != nil {
 		return sdk.WithStack(err)
 	}
-
 	return nil
 }
 
@@ -586,6 +587,18 @@ func load(ctx context.Context, db gorp.SqlExecutor, proj sdk.Project, opts LoadO
 			return nil, sdk.WrapError(errInt, "Load> unable to load workflow integrations")
 		}
 		res.EventIntegrations = integrations
+	}
+
+	if opts.WithTemplate {
+		wti, err := workflowtemplate.LoadInstanceByWorkflowID(ctx, db, res.ID, workflowtemplate.LoadInstanceOptions.WithTemplate)
+		if err != nil && !sdk.ErrorIs(err, sdk.ErrNotFound) {
+			return nil, err
+		}
+		if wti != nil {
+			res.TemplateInstance = wti
+			res.FromTemplate = fmt.Sprintf("%s@%d", wti.Template.Path(), wti.WorkflowTemplateVersion)
+			res.TemplateUpToDate = wti.Template.Version == wti.WorkflowTemplateVersion
+		}
 	}
 
 	_, next = observability.Span(ctx, "workflow.load.loadNotifications")
@@ -1184,7 +1197,7 @@ func checkHooks(db gorp.SqlExecutor, w *sdk.Workflow, n *sdk.Node) error {
 			h.HookModelID = hm.ID
 		}
 		if h.HookModelName == sdk.RepositoryWebHookModelName && (n.Context == nil || n.Context.ApplicationID == 0) {
-			return sdk.WrapError(sdk.ErrApplicationNotFound, "unable to find application for the repository web hook: %d: %s/%s", w.ID, w.Name, n.Name)
+			return sdk.WrapError(sdk.ErrNotFound, "unable to find application for the repository web hook: %d: %s/%s", w.ID, w.Name, n.Name)
 		}
 
 		// Add missing default value for hook
@@ -1257,7 +1270,7 @@ func checkProjectIntegration(proj sdk.Project, w *sdk.Workflow, n *sdk.Node) err
 			}
 		}
 		if ppProj.ID == 0 {
-			return sdk.WithStack(sdk.ErrorWithData(sdk.ErrIntegrationtNotFound, n.Context.ProjectIntegrationName))
+			return sdk.WithData(sdk.ErrIntegrationtNotFound, n.Context.ProjectIntegrationName)
 		}
 		w.ProjectIntegrations[ppProj.ID] = ppProj
 		n.Context.ProjectIntegrationID = ppProj.ID
@@ -1321,12 +1334,12 @@ func checkApplication(ctx context.Context, store cache.Store, db gorp.SqlExecuto
 	if n.Context.ApplicationID != 0 {
 		app, ok := w.Applications[n.Context.ApplicationID]
 		if !ok {
-			appDB, errA := application.LoadByID(ctx, db, n.Context.ApplicationID,
+			appDB, err := application.LoadByID(ctx, db, n.Context.ApplicationID,
 				application.LoadOptions.WithDeploymentStrategies,
 				application.LoadOptions.WithVariables,
 			)
-			if errA != nil {
-				return errA
+			if err != nil {
+				return err
 			}
 			app = *appDB
 			if app.ProjectID != proj.ID {
@@ -1344,8 +1357,8 @@ func checkApplication(ctx context.Context, store cache.Store, db gorp.SqlExecuto
 			application.LoadOptions.WithVariables,
 		)
 		if err != nil {
-			if sdk.ErrorIs(err, sdk.ErrApplicationNotFound) {
-				return sdk.WithStack(sdk.ErrorWithData(sdk.ErrApplicationNotFound, n.Context.ApplicationName))
+			if sdk.ErrorIs(err, sdk.ErrNotFound) {
+				return sdk.WithData(sdk.ErrNotFound, n.Context.ApplicationName)
 			}
 			return sdk.WrapError(err, "unable to load application %s", n.Context.ApplicationName)
 		}
@@ -1505,7 +1518,7 @@ func Push(ctx context.Context, db *gorp.DbMap, store cache.Store, proj *sdk.Proj
 
 	if wf.WorkflowData.Node.Context.ApplicationID != 0 {
 		app := wf.Applications[wf.WorkflowData.Node.Context.ApplicationID]
-		if err := application.Update(tx, store, &app); err != nil {
+		if err := application.Update(ctx, tx, &app); err != nil {
 			return nil, nil, nil, sdk.WrapError(err, "Unable to update application vcs datas")
 		}
 		wf.Applications[wf.WorkflowData.Node.Context.ApplicationID] = app
@@ -1516,7 +1529,7 @@ func Push(ctx context.Context, db *gorp.DbMap, store cache.Store, proj *sdk.Proj
 		log.Debug("workflow %s rollbacked because it's not coming from the default branch", wf.Name)
 	} else {
 		if err := tx.Commit(); err != nil {
-			return nil, nil, nil, sdk.WrapError(err, "cannot commit transaction")
+			return nil, nil, nil, sdk.WithStack(err)
 		}
 
 		log.Debug("workflow %s updated", wf.Name)

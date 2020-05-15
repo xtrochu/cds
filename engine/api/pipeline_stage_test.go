@@ -18,7 +18,7 @@ import (
 
 func deleteAll(t *testing.T, api *API, key string) {
 	t.Logf("start deleted : %s", key)
-	proj, _ := project.Load(api.mustDB(), api.Cache, key, project.LoadOptions.WithGroups)
+	proj, _ := project.Load(api.mustDB(), key, project.LoadOptions.WithGroups)
 	if proj == nil {
 		return
 	}
@@ -41,7 +41,7 @@ func deleteAll(t *testing.T, api *API, key string) {
 		require.NoError(t, group.Delete(context.TODO(), api.mustDB(), &g.Group))
 	}
 
-	require.NoError(t, project.Delete(api.mustDB(), api.Cache, key))
+	require.NoError(t, project.Delete(api.mustDB(), key))
 
 	t.Logf("All deleted")
 }

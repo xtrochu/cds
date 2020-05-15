@@ -25,7 +25,7 @@ func (api *API) getVariablesHandler() service.Handler {
 
 		var allVariables []string
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey, project.LoadOptions.WithVariables)
+		proj, err := project.Load(api.mustDB(), projectKey, project.LoadOptions.WithVariables)
 		if err != nil {
 			return err
 		}
@@ -58,7 +58,7 @@ func (api *API) getVariablesHandler() service.Handler {
 		// Load app
 		appVar := []string{}
 		if appName != "" {
-			proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+			proj, err := project.Load(api.mustDB(), projectKey)
 			if err != nil {
 				return sdk.WrapError(err, "cannot load project %s", projectKey)
 			}

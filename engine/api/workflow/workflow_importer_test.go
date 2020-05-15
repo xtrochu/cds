@@ -18,6 +18,7 @@ import (
 	"github.com/ovh/cds/engine/api/test/assets"
 	"github.com/ovh/cds/engine/api/workflow"
 	"github.com/ovh/cds/sdk"
+	"github.com/stretchr/testify/require"
 )
 
 type mockHTTPClient struct {
@@ -69,7 +70,7 @@ func TestImport(t *testing.T) {
 	app := &sdk.Application{
 		Name: sdk.RandomString(10),
 	}
-	test.NoError(t, application.Insert(db, cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, cache, proj.ID, app))
 
 	//Environment
 	envName := sdk.RandomString(10)
@@ -80,7 +81,7 @@ func TestImport(t *testing.T) {
 	test.NoError(t, environment.InsertEnvironment(db, env))
 
 	//Reload project
-	proj, _ = project.Load(db, cache, proj.Key, project.LoadOptions.WithApplications, project.LoadOptions.WithEnvironments, project.LoadOptions.WithPipelines)
+	proj, _ = project.Load(db, proj.Key, project.LoadOptions.WithApplications, project.LoadOptions.WithEnvironments, project.LoadOptions.WithPipelines)
 
 	test.NoError(t, workflow.CreateBuiltinWorkflowHookModels(db))
 	hookModels, err := workflow.LoadHookModels(db)

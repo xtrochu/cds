@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v2"
 
 	"github.com/ovh/cds/engine/api/application"
 	"github.com/ovh/cds/engine/api/integration"
 	"github.com/ovh/cds/engine/api/keys"
-	"github.com/ovh/cds/engine/api/test"
 	"github.com/ovh/cds/engine/api/test/assets"
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/exportentities"
@@ -26,14 +26,14 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithoutSecret(t *testing.T)
 
 	u, pass := assets.InsertAdminUser(t, db)
 	proj := assets.InsertTestProject(t, db, api.Cache, sdk.RandomString(10), sdk.RandomString(10))
-	test.NotNil(t, proj)
+	require.NotNil(t, proj)
 
 	//Prepare request
 	vars := map[string]string{
 		"permProjectKey": proj.Key,
 	}
 	uri := api.Router.GetRoute("POST", api.postApplicationImportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req := assets.NewAuthentifiedRequest(t, u, pass, "POST", uri, nil)
 
 	body := `version: v1.0
@@ -62,7 +62,7 @@ variables:
 	t.Logf(">>%s", rec.Body.String())
 
 	app, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp", application.LoadOptions.WithVariables)
-	test.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.NotNil(t, app)
 	assert.Equal(t, "myNewApp", app.Name)
@@ -86,7 +86,6 @@ variables:
 			t.Errorf("Unexpected variable %+v", v)
 		}
 	}
-
 }
 
 func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testing.T) {
@@ -95,7 +94,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testi
 
 	u, pass := assets.InsertAdminUser(t, db)
 	proj := assets.InsertTestProject(t, db, api.Cache, sdk.RandomString(10), sdk.RandomString(10))
-	test.NotNil(t, proj)
+	require.NotNil(t, proj)
 
 	//We will create an app, with a pgp key, export it then import as a new application(with a different name)
 	//This is also a good test for export secrets
@@ -103,7 +102,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testi
 	app := &sdk.Application{
 		Name: "myNewApp",
 	}
-	test.NoError(t, application.Insert(db, api.Cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, api.Cache, proj.ID, app))
 
 	k := &sdk.ApplicationKey{
 		Name:          "app-mykey",
@@ -112,7 +111,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testi
 	}
 
 	kpgp, err := keys.GeneratePGPKeyPair(k.Name)
-	test.NoError(t, err)
+	require.NoError(t, err)
 	k.Public = kpgp.Public
 	k.Private = kpgp.Private
 	k.KeyID = kpgp.KeyID
@@ -120,7 +119,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testi
 		t.Fatal(err)
 	}
 
-	test.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.Variable{
+	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.Variable{
 		Name:  "myPassword",
 		Type:  sdk.SecretVariable,
 		Value: "MySecretValue",
@@ -132,7 +131,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testi
 		"applicationName": app.Name,
 	}
 	uri := api.Router.GetRoute("GET", api.getApplicationExportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req := assets.NewAuthentifiedRequest(t, u, pass, "GET", uri, nil)
 
 	//Do the request
@@ -152,7 +151,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testi
 		"permProjectKey": proj.Key,
 	}
 	uri = api.Router.GetRoute("POST", api.postApplicationImportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req = assets.NewAuthentifiedRequest(t, u, pass, "POST", uri, nil)
 	req.Body = ioutil.NopCloser(strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-yaml")
@@ -166,11 +165,11 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testi
 	t.Logf(">>%s", rec.Body.String())
 
 	app, err = application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
-	test.NoError(t, err)
+	require.NoError(t, err)
 
 	//Reload the application to check the keys
 	app1, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp-1", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
-	test.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.NotNil(t, app1)
 	assert.Equal(t, "myNewApp-1", app1.Name)
@@ -207,12 +206,12 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 
 	u, pass := assets.InsertAdminUser(t, db)
 	proj := assets.InsertTestProject(t, db, api.Cache, sdk.RandomString(10), sdk.RandomString(10))
-	test.NotNil(t, proj)
+	require.NotNil(t, proj)
 
 	app := &sdk.Application{
 		Name: "myNewApp",
 	}
-	test.NoError(t, application.Insert(db, api.Cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, api.Cache, proj.ID, app))
 
 	k := &sdk.ApplicationKey{
 		Name:          "app-mykey",
@@ -221,7 +220,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	}
 
 	kpgp, err := keys.GeneratePGPKeyPair(k.Name)
-	test.NoError(t, err)
+	require.NoError(t, err)
 	k.Public = kpgp.Public
 	k.Private = kpgp.Private
 	k.KeyID = kpgp.KeyID
@@ -229,7 +228,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 		t.Fatal(err)
 	}
 
-	test.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.Variable{
+	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.Variable{
 		Name:  "myPassword",
 		Type:  sdk.SecretVariable,
 		Value: "MySecretValue",
@@ -241,7 +240,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 		"applicationName": app.Name,
 	}
 	uri := api.Router.GetRoute("GET", api.getApplicationExportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req := assets.NewAuthentifiedRequest(t, u, pass, "GET", uri, nil)
 
 	//Do the request
@@ -261,7 +260,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 		"permProjectKey": proj.Key,
 	}
 	uri = api.Router.GetRoute("POST", api.postApplicationImportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req = assets.NewAuthentifiedRequest(t, u, pass, "POST", uri, nil)
 	req.Body = ioutil.NopCloser(strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-yaml")
@@ -275,11 +274,11 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	t.Logf(">>%s", rec.Body.String())
 
 	app, err = application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
-	test.NoError(t, err)
+	require.NoError(t, err)
 
 	//Reload the application to check the keys
 	app1, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp-1", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
-	test.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.NotNil(t, app1)
 	assert.Equal(t, "myNewApp-1", app1.Name)
@@ -315,7 +314,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 		"permProjectKey": proj.Key,
 	}
 	uri = api.Router.GetRoute("POST", api.postApplicationImportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req = assets.NewAuthentifiedRequest(t, u, pass, "POST", uri+"?force=true", nil)
 	req.Body = ioutil.NopCloser(strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/x-yaml")
@@ -329,11 +328,11 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	t.Logf(">>%s", rec.Body.String())
 
 	app, err = application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
-	test.NoError(t, err)
+	require.NoError(t, err)
 
 	//Reload the application to check the keys
 	app1, err = application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp-1", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
-	test.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.NotNil(t, app1)
 	assert.Equal(t, "myNewApp-1", app1.Name)
@@ -371,12 +370,12 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 
 	u, pass := assets.InsertAdminUser(t, db)
 	proj := assets.InsertTestProject(t, db, api.Cache, sdk.RandomString(10), sdk.RandomString(10))
-	test.NotNil(t, proj)
+	require.NotNil(t, proj)
 
 	app := &sdk.Application{
 		Name: "myNewApp",
 	}
-	test.NoError(t, application.Insert(db, api.Cache, proj.ID, app))
+	require.NoError(t, application.Insert(db, api.Cache, proj.ID, app))
 
 	// create password, pgp and ssh keys
 	k1 := &sdk.ApplicationKey{
@@ -386,11 +385,11 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	}
 
 	kpgp, err := keys.GeneratePGPKeyPair(k1.Name)
-	test.NoError(t, err)
+	require.NoError(t, err)
 	k1.Public = kpgp.Public
 	k1.Private = kpgp.Private
 	k1.KeyID = kpgp.KeyID
-	test.NoError(t, application.InsertKey(api.mustDB(), k1))
+	require.NoError(t, application.InsertKey(api.mustDB(), k1))
 
 	// create password, pgp and ssh keys
 	k2 := &sdk.ApplicationKey{
@@ -400,13 +399,13 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	}
 
 	kssh, err := keys.GenerateSSHKey(k2.Name)
-	test.NoError(t, err)
+	require.NoError(t, err)
 	k2.Public = kssh.Public
 	k2.Private = kssh.Private
 	k2.KeyID = kssh.KeyID
-	test.NoError(t, application.InsertKey(api.mustDB(), k2))
+	require.NoError(t, application.InsertKey(api.mustDB(), k2))
 
-	test.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.Variable{
+	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.Variable{
 		Name:  "myPassword",
 		Type:  sdk.SecretVariable,
 		Value: "MySecretValue",
@@ -417,10 +416,10 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 		application.LoadOptions.WithClearKeys,
 		application.LoadOptions.WithVariablesWithClearPassword,
 	)
-	test.NoError(t, err)
-	test.Equal(t, 1, len(app.Variables))
-	test.Equal(t, "MySecretValue", app.Variables[0].Value)
-	test.Equal(t, 2, len(app.Keys))
+	require.NoError(t, err)
+	require.Equal(t, 1, len(app.Variables))
+	require.Equal(t, "MySecretValue", app.Variables[0].Value)
+	require.Equal(t, 2, len(app.Keys))
 
 	mKeys := make(map[sdk.KeyType]sdk.ApplicationKey, 2)
 	mKeys[app.Keys[0].Type] = app.Keys[0]
@@ -429,15 +428,15 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	assert.True(t, ok)
 	rpgp, ok := mKeys["pgp"]
 	assert.True(t, ok)
-	test.Equal(t, kpgp.Private, rpgp.Private)
-	test.Equal(t, kssh.Private, rssh.Private)
+	require.Equal(t, kpgp.Private, rpgp.Private)
+	require.Equal(t, kssh.Private, rssh.Private)
 
 	// export the app then import it with regen false
 	uri := api.Router.GetRoute("GET", api.getApplicationExportHandler, map[string]string{
 		"permProjectKey":  proj.Key,
 		"applicationName": app.Name,
 	})
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req := assets.NewAuthentifiedRequest(t, u, pass, "GET", uri, nil)
 
 	//Do the request
@@ -450,9 +449,9 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	t.Logf(">>%s", body)
 
 	eapp := &exportentities.Application{}
-	test.NoError(t, yaml.Unmarshal([]byte(body), eapp))
-	test.Equal(t, 1, len(eapp.Variables))
-	test.Equal(t, 2, len(eapp.Keys))
+	require.NoError(t, yaml.Unmarshal([]byte(body), eapp))
+	require.Equal(t, 1, len(eapp.Variables))
+	require.Equal(t, 2, len(eapp.Keys))
 
 	False := false
 	ek1 := eapp.Keys[k1.Name]
@@ -474,7 +473,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	uri = api.Router.GetRoute("POST", api.postApplicationImportHandler, map[string]string{
 		"permProjectKey": proj.Key,
 	})
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	uri += "?force=true"
 	req = assets.NewAuthentifiedRequest(t, u, pass, "POST", uri, nil)
 	req.Body = ioutil.NopCloser(strings.NewReader(body))
@@ -490,10 +489,10 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 		application.LoadOptions.WithClearKeys,
 		application.LoadOptions.WithVariablesWithClearPassword,
 	)
-	test.NoError(t, err)
-	test.Equal(t, 1, len(app.Variables))
-	test.Equal(t, "MySecretValue", app.Variables[0].Value)
-	test.Equal(t, 2, len(app.Keys))
+	require.NoError(t, err)
+	require.Equal(t, 1, len(app.Variables))
+	require.Equal(t, "MySecretValue", app.Variables[0].Value)
+	require.Equal(t, 2, len(app.Keys))
 	mKeys = make(map[sdk.KeyType]sdk.ApplicationKey, 2)
 	mKeys[app.Keys[0].Type] = app.Keys[0]
 	mKeys[app.Keys[1].Type] = app.Keys[1]
@@ -501,8 +500,8 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	assert.True(t, ok)
 	rpgp, ok = mKeys["pgp"]
 	assert.True(t, ok)
-	test.Equal(t, kpgp.Private, rpgp.Private)
-	test.Equal(t, kssh.Private, rssh.Private)
+	require.Equal(t, kpgp.Private, rpgp.Private)
+	require.Equal(t, kssh.Private, rssh.Private)
 }
 
 func Test_postApplicationImportHandler_NewAppFromYAMLWithEmptyKey(t *testing.T) {
@@ -511,14 +510,14 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithEmptyKey(t *testing.T) 
 
 	u, pass := assets.InsertAdminUser(t, db)
 	proj := assets.InsertTestProject(t, db, api.Cache, sdk.RandomString(10), sdk.RandomString(10))
-	test.NotNil(t, proj)
+	require.NotNil(t, proj)
 
 	//Prepare request
 	vars := map[string]string{
 		"permProjectKey": proj.Key,
 	}
 	uri := api.Router.GetRoute("POST", api.postApplicationImportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req := assets.NewAuthentifiedRequest(t, u, pass, "POST", uri, nil)
 
 	body := `version: v1.0
@@ -541,7 +540,7 @@ keys:
 	t.Logf(">>%s", rec.Body.String())
 
 	app, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp", application.LoadOptions.WithKeys)
-	test.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.NotNil(t, app)
 	assert.Equal(t, "myNewApp", app.Name)
@@ -566,7 +565,6 @@ keys:
 	}
 	assert.True(t, myPGPkey, "myPGPkey not found")
 	assert.True(t, mySSHKey, "mySSHKey not found")
-
 }
 
 func Test_postApplicationImportHandler_ExistingAppFromYAMLWithoutForce(t *testing.T) {
@@ -575,19 +573,19 @@ func Test_postApplicationImportHandler_ExistingAppFromYAMLWithoutForce(t *testin
 
 	u, pass := assets.InsertAdminUser(t, db)
 	proj := assets.InsertTestProject(t, db, api.Cache, sdk.RandomString(10), sdk.RandomString(10))
-	test.NotNil(t, proj)
+	require.NotNil(t, proj)
 
 	app := sdk.Application{
 		Name: "myNewApp",
 	}
-	test.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 
 	//Prepare request
 	vars := map[string]string{
 		"permProjectKey": proj.Key,
 	}
 	uri := api.Router.GetRoute("POST", api.postApplicationImportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req := assets.NewAuthentifiedRequest(t, u, pass, "POST", uri, nil)
 
 	body := `version: v1.0
@@ -610,19 +608,19 @@ func Test_postApplicationImportHandler_ExistingAppFromYAMLInheritPermissions(t *
 
 	u, pass := assets.InsertAdminUser(t, db)
 	proj := assets.InsertTestProject(t, db, api.Cache, sdk.RandomString(10), sdk.RandomString(10))
-	test.NotNil(t, proj)
+	require.NotNil(t, proj)
 
 	app := sdk.Application{
 		Name: "myNewApp",
 	}
-	test.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 
 	//Prepare request
 	vars := map[string]string{
 		"permProjectKey": proj.Key,
 	}
 	uri := api.Router.GetRoute("POST", api.postApplicationImportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req := assets.NewAuthentifiedRequest(t, u, pass, "POST", uri+"?force=true", nil)
 
 	body := `version: v1.0
@@ -645,7 +643,7 @@ func Test_postApplicationImportHandler_ExistingAppWithDeploymentStrategy(t *test
 
 	u, pass := assets.InsertAdminUser(t, db)
 	proj := assets.InsertTestProject(t, db, api.Cache, sdk.RandomString(10), sdk.RandomString(10))
-	test.NotNil(t, proj)
+	require.NotNil(t, proj)
 
 	pfname := sdk.RandomString(10)
 	pf := sdk.IntegrationModel{
@@ -662,7 +660,7 @@ func Test_postApplicationImportHandler_ExistingAppWithDeploymentStrategy(t *test
 			},
 		},
 	}
-	test.NoError(t, integration.InsertModel(db, &pf))
+	require.NoError(t, integration.InsertModel(db, &pf))
 	defer func() { _ = integration.DeleteModel(db, pf.ID) }()
 
 	pp := sdk.ProjectIntegration{
@@ -671,14 +669,14 @@ func Test_postApplicationImportHandler_ExistingAppWithDeploymentStrategy(t *test
 		IntegrationModelID: pf.ID,
 		ProjectID:          proj.ID,
 	}
-	test.NoError(t, integration.InsertIntegration(db, &pp))
+	require.NoError(t, integration.InsertIntegration(db, &pp))
 
 	app := sdk.Application{
 		Name: "myNewApp",
 	}
-	test.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 
-	test.NoError(t, application.SetDeploymentStrategy(db, proj.ID, app.ID, pf.ID, pp.Name, sdk.IntegrationConfig{
+	require.NoError(t, application.SetDeploymentStrategy(db, proj.ID, app.ID, pf.ID, pp.Name, sdk.IntegrationConfig{
 		"token": sdk.IntegrationConfigValue{
 			Type:  sdk.IntegrationConfigTypePassword,
 			Value: "my-secret-token-2",
@@ -694,7 +692,7 @@ func Test_postApplicationImportHandler_ExistingAppWithDeploymentStrategy(t *test
 		"applicationName": app.Name,
 	}
 	uri := api.Router.GetRoute("GET", api.getApplicationExportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req := assets.NewAuthentifiedRequest(t, u, pass, "GET", uri, nil)
 
 	//Do the request
@@ -709,7 +707,7 @@ func Test_postApplicationImportHandler_ExistingAppWithDeploymentStrategy(t *test
 		"permProjectKey": proj.Key,
 	}
 	uri = api.Router.GetRoute("POST", api.postApplicationImportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req = assets.NewAuthentifiedRequest(t, u, pass, "POST", uri+"?force=true", nil)
 
 	body = strings.Replace(body, "my-url-2", "my-url-3", 1)
@@ -733,7 +731,7 @@ func Test_postApplicationImportHandler_ExistingAppWithDeploymentStrategy(t *test
 		"applicationName": app.Name,
 	}
 	uri = api.Router.GetRoute("GET", api.getApplicationExportHandler, vars)
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req = assets.NewAuthentifiedRequest(t, u, pass, "GET", uri, nil)
 
 	//Do the request
@@ -745,7 +743,7 @@ func Test_postApplicationImportHandler_ExistingAppWithDeploymentStrategy(t *test
 	t.Logf(">>%s", rec.Body.String())
 
 	actualApp, err := application.LoadByProjectIDAndName(context.TODO(), api.mustDB(), proj.ID, app.Name, application.LoadOptions.WithClearDeploymentStrategies)
-	test.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "my-secret-token-2", actualApp.DeploymentStrategies[pfname]["token"].Value)
 	assert.Equal(t, "my-url-3", actualApp.DeploymentStrategies[pfname]["url"].Value)
 }
@@ -757,7 +755,7 @@ func Test_postApplicationImportHandler_DontOverrideDeploymentPasswordIfNotGiven(
 
 	u, pass := assets.InsertAdminUser(t, db)
 	proj := assets.InsertTestProject(t, db, api.Cache, sdk.RandomString(10), sdk.RandomString(10))
-	test.NotNil(t, proj)
+	require.NotNil(t, proj)
 
 	pfname := sdk.RandomString(10)
 	pf := sdk.IntegrationModel{
@@ -774,7 +772,7 @@ func Test_postApplicationImportHandler_DontOverrideDeploymentPasswordIfNotGiven(
 			},
 		},
 	}
-	test.NoError(t, integration.InsertModel(db, &pf))
+	require.NoError(t, integration.InsertModel(db, &pf))
 	defer func() { _ = integration.DeleteModel(db, pf.ID) }()
 
 	pp := sdk.ProjectIntegration{
@@ -783,14 +781,14 @@ func Test_postApplicationImportHandler_DontOverrideDeploymentPasswordIfNotGiven(
 		IntegrationModelID: pf.ID,
 		ProjectID:          proj.ID,
 	}
-	test.NoError(t, integration.InsertIntegration(db, &pp))
+	require.NoError(t, integration.InsertIntegration(db, &pp))
 
 	app := sdk.Application{
 		Name: "myNewApp",
 	}
-	test.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
+	require.NoError(t, application.Insert(db, api.Cache, proj.ID, &app))
 
-	test.NoError(t, application.SetDeploymentStrategy(db, proj.ID, app.ID, pf.ID, pp.Name, sdk.IntegrationConfig{
+	require.NoError(t, application.SetDeploymentStrategy(db, proj.ID, app.ID, pf.ID, pp.Name, sdk.IntegrationConfig{
 		"token": sdk.IntegrationConfigValue{
 			Type:  sdk.IntegrationConfigTypePassword,
 			Value: "my-secret-token-2",
@@ -818,11 +816,11 @@ func Test_postApplicationImportHandler_DontOverrideDeploymentPasswordIfNotGiven(
 	uri := api.Router.GetRoute("POST", api.postApplicationImportHandler, map[string]string{
 		"permProjectKey": proj.Key,
 	})
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req := assets.NewAuthentifiedRequest(t, u, pass, "POST", uri+"?force=true", nil)
 
 	buf, err := yaml.Marshal(appUpdated)
-	test.NoError(t, err)
+	require.NoError(t, err)
 	req.Body = ioutil.NopCloser(bytes.NewReader(buf))
 	req.Header.Set("Content-Type", "application/x-yaml")
 
@@ -838,7 +836,7 @@ func Test_postApplicationImportHandler_DontOverrideDeploymentPasswordIfNotGiven(
 		"permProjectKey":  proj.Key,
 		"applicationName": app.Name,
 	})
-	test.NotEmpty(t, uri)
+	require.NotEmpty(t, uri)
 	req = assets.NewAuthentifiedRequest(t, u, pass, "GET", uri, nil)
 
 	rec = httptest.NewRecorder()
@@ -848,7 +846,7 @@ func Test_postApplicationImportHandler_DontOverrideDeploymentPasswordIfNotGiven(
 	t.Logf(">>%s", rec.Body.String())
 
 	actualApp, err := application.LoadByProjectIDAndName(context.TODO(), api.mustDB(), proj.ID, app.Name, application.LoadOptions.WithClearDeploymentStrategies)
-	test.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "my-secret-token-2", actualApp.DeploymentStrategies[pfname]["token"].Value)
 	assert.Equal(t, "my-url-2", actualApp.DeploymentStrategies[pfname]["url"].Value)
 }

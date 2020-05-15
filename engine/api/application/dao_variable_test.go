@@ -22,10 +22,9 @@ func Test_DAOVariable(t *testing.T) {
 	app := sdk.Application{
 		Name: "my-app",
 	}
+	require.NoError(t, application.Insert(db, proj.ID, &app))
 
 	u, _ := assets.InsertLambdaUser(t, db, &proj.ProjectGroups[0].Group)
-
-	require.NoError(t, application.Insert(db, cache, proj.ID, &app))
 
 	v1 := &sdk.Variable{Name: "clear", Type: sdk.TextVariable, Value: "clear_value"}
 	v2 := &sdk.Variable{Name: "secret", Type: sdk.SecretVariable, Value: "secret_value"}

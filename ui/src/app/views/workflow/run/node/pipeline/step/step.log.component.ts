@@ -22,6 +22,7 @@ import { DurationService } from 'app/shared/duration/duration.service';
 import { CDSWebWorker } from 'app/shared/worker/web.worker';
 import { ProjectState } from 'app/store/project.state';
 import { WorkflowState, WorkflowStateModel } from 'app/store/workflow.state';
+import cloneDeep from 'lodash-es/cloneDeep';
 import { Observable, Subscription } from 'rxjs';
 
 @Component({
@@ -56,7 +57,7 @@ export class WorkflowStepLogComponent implements OnInit, OnDestroy {
     doneExec: Date;
     duration: string;
     selectedLine: number;
-    splittedLogs: { lineNumber: number, value: string }[] = [];
+    splittedLogs: { lineNumber: number, value: string }[];
     splittedLogsToDisplay: { lineNumber: number, value: string }[] = [];
     limitFrom: number;
     limitTo: number;
@@ -72,7 +73,7 @@ export class WorkflowStepLogComponent implements OnInit, OnDestroy {
     _stepStatus: StepStatus;
     pipelineBuildStatusEnum = PipelineStatus;
     MAX_PRETTY_LOGS_LINES = 3500;
-    @ViewChild('logsContent', { static: false }) logsElt: ElementRef;
+    @ViewChild('logsContent') logsElt: ElementRef;
 
     constructor(
         private _durationService: DurationService,
@@ -117,7 +118,7 @@ export class WorkflowStepLogComponent implements OnInit, OnDestroy {
                 if (nrj.job.step_status && nrj.job.step_status.length >= this.stepOrder + 1) {
                     let status = nrj.job.step_status[this.stepOrder].status;
                     if (!this.stepStatus || status !== this.stepStatus.status) {
-                        if (!this.stepStatus ) {
+                        if (!this.stepStatus) {
                             this.initWorker();
                             this.showLogs = true;
                         } else if (this.pipelineBuildStatusEnum.isActive(this.stepStatus.status) &&
@@ -203,7 +204,6 @@ export class WorkflowStepLogComponent implements OnInit, OnDestroy {
     }
 
     htmlView() {
-        this.ansiViewSelected = this.ansiViewSelected;
         this.htmlViewSelected = !this.htmlViewSelected;
         this.basicView = false;
         this.splittedLogs = null;
@@ -213,7 +213,6 @@ export class WorkflowStepLogComponent implements OnInit, OnDestroy {
 
     ansiView() {
         this.ansiViewSelected = !this.ansiViewSelected;
-        this.htmlViewSelected = this.htmlViewSelected;
         this.basicView = false;
         this.splittedLogs = null;
         this.parseLogs();
@@ -231,7 +230,7 @@ export class WorkflowStepLogComponent implements OnInit, OnDestroy {
 
     parseLogs() {
         let tmpLogs = this.getLogsSplitted();
-        if ( (!this.splittedLogs && !tmpLogs) || (this.splittedLogs && tmpLogs && this.splittedLogs.length === tmpLogs.length)) {
+        if ((!this.splittedLogs && !tmpLogs) || (this.splittedLogs && tmpLogs && this.splittedLogs.length === tmpLogs.length)) {
             return;
         }
         if (!this.splittedLogs || this.splittedLogs.length > tmpLogs.length) {
@@ -243,18 +242,18 @@ export class WorkflowStepLogComponent implements OnInit, OnDestroy {
             });
         } else {
             this.splittedLogs.push(...tmpLogs.slice(this.splittedLogs.length).map((log, i) => {
-                    if (this.ansiViewSelected) {
-                        return { lineNumber: this.splittedLogs.length + i, value: this.ansi_up.ansi_to_html(log) };
-                    }
-                    return { lineNumber: this.splittedLogs.length  + i, value: log };
+                if (this.ansiViewSelected) {
+                    return { lineNumber: this.splittedLogs.length + i + 1, value: this.ansi_up.ansi_to_html(log) };
+                }
+                return { lineNumber: this.splittedLogs.length + i + 1, value: log };
             }));
         }
-        if (!this.allLogsView && this.splittedLogs.length > this.MAX_PRETTY_LOGS_LINES && !this._route.snapshot.fragment) {
+
+        this.splittedLogsToDisplay = cloneDeep(this.splittedLogs);
+        if (!this.allLogsView && this.splittedLogsToDisplay.length > this.MAX_PRETTY_LOGS_LINES && !this._route.snapshot.fragment) {
             this.limitFrom = 30;
             this.limitTo = this.splittedLogs.length - 40;
             this.splittedLogsToDisplay.splice(this.limitFrom, this.limitTo - this.limitFrom);
-        } else {
-            this.splittedLogsToDisplay = this.splittedLogs;
         }
         this._cd.markForCheck();
     }
@@ -325,12 +324,13 @@ export class WorkflowStepLogComponent implements OnInit, OnDestroy {
     showAllLogs() {
         this.loadingMore = true;
         this.allLogsView = true;
+        this._cd.markForCheck();
         setTimeout(() => {
             this.limitFrom = null;
             if (this.splittedLogs.length > this.MAX_PRETTY_LOGS_LINES) {
                 this.basicView = true;
             }
-            this.splittedLogsToDisplay = this.splittedLogs;
+            this.splittedLogsToDisplay = cloneDeep(this.splittedLogs);
             this.loadingMore = false;
             this._cd.markForCheck();
         }, 0);

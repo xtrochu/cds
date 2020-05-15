@@ -29,7 +29,7 @@ import { filter, finalize, first } from 'rxjs/operators';
 })
 @AutoUnsubscribe()
 export class WorkflowAddComponent implements OnInit {
-    @ViewChild('codeMirror', { static: false }) codemirror: any;
+    @ViewChild('codeMirror') codemirror: any;
 
     workflow: Workflow;
     project: Project;
@@ -37,7 +37,7 @@ export class WorkflowAddComponent implements OnInit {
     codeMirrorConfig: any;
     wfToImport = `# Example of workflow
 name: myWorkflow
-version: v1.0
+version: v2.0
 workflow:
   myBuild:
     pipeline: build

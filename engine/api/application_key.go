@@ -21,7 +21,7 @@ func (api *API) getKeysInApplicationHandler() service.Handler {
 		projectKey := vars[permProjectKey]
 		appName := vars["applicationName"]
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
@@ -42,7 +42,7 @@ func (api *API) deleteKeyInApplicationHandler() service.Handler {
 		appName := vars["applicationName"]
 		keyName := vars["name"]
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
@@ -76,7 +76,7 @@ func (api *API) deleteKeyInApplicationHandler() service.Handler {
 		}
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "Cannot commit transaction")
+			return sdk.WithStack(err)
 		}
 		event.PublishApplicationKeyDelete(ctx, projectKey, *app, keyToDelete, getAPIConsumer(ctx))
 
@@ -101,7 +101,7 @@ func (api *API) addKeyInApplicationHandler() service.Handler {
 			return sdk.WrapError(sdk.ErrInvalidKeyPattern, "addKeyInApplicationHandler: Key name %s do not respect pattern %s", newKey.Name, sdk.NamePattern)
 		}
 
-		proj, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
@@ -151,7 +151,7 @@ func (api *API) addKeyInApplicationHandler() service.Handler {
 		}
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "Cannot commit transaction")
+			return sdk.WithStack(err)
 		}
 
 		event.PublishApplicationKeyAdd(ctx, projectKey, *app, newKey, getAPIConsumer(ctx))

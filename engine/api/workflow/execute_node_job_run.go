@@ -442,6 +442,16 @@ func LoadSecrets(ctx context.Context, db gorp.SqlExecutor, store cache.Store, no
 		// Application variables
 		av := []sdk.Variable{}
 		if app != nil {
+			// FIXME manage secret ascode
+			// try to retreive application from database, application can be not found for ascode run
+			tempApp, err := application.LoadByIDWithClearVCSStrategyPassword(ctx, db, app.ID)
+			if err != nil && !sdk.ErrorIs(err, sdk.ErrNotFound) {
+				return nil, err
+			}
+			if tempApp != nil {
+				app.RepositoryStrategy.Password = tempApp.RepositoryStrategy.Password
+			}
+
 			appVariables, err := application.LoadVariablesWithDecrytion(ctx, db, app.ID)
 			if err != nil {
 				return nil, sdk.WrapError(err, "cannot load application variables")
@@ -449,9 +459,6 @@ func LoadSecrets(ctx context.Context, db gorp.SqlExecutor, store cache.Store, no
 			av = sdk.VariablesFilter(appVariables, sdk.SecretVariable)
 			av = sdk.VariablesPrefix(av, "cds.app.")
 
-			if err := application.DecryptVCSStrategyPassword(app); err != nil {
-				return nil, sdk.WrapError(err, "cannot decrypt vcs configuration")
-			}
 			av = append(av, sdk.Variable{
 				Name:  "git.http.password",
 				Type:  sdk.SecretVariable,
@@ -473,7 +480,7 @@ func LoadSecrets(ctx context.Context, db gorp.SqlExecutor, store cache.Store, no
 		secrets = append(secrets, ev...)
 
 		if pp != nil {
-			projectIntegration, err := integration.LoadProjectIntegrationByID(db, pp.ID, true)
+			projectIntegration, err := integration.LoadProjectIntegrationByIDWithClearPassword(db, pp.ID)
 			if err != nil {
 				return nil, sdk.WrapError(err, "LoadSecrets> Cannot load integration %d", pp.ID)
 			}

@@ -668,25 +668,21 @@ func Test_getWorkflowPushHandler(t *testing.T) {
 	app := &sdk.Application{
 		Name: appName,
 	}
-	if err := application.Insert(api.mustDB(), api.Cache, proj.ID, app); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, application.Insert(api.mustDB(), proj.ID, app))
 
 	v1 := sdk.Variable{
 		Name:  "var1",
 		Value: "value 1",
 		Type:  sdk.StringVariable,
 	}
-
-	test.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &v1, u))
+	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &v1, u))
 
 	v2 := sdk.Variable{
 		Name:  "var2",
 		Value: "value 2",
 		Type:  sdk.SecretVariable,
 	}
-
-	test.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &v2, u))
+	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &v2, u))
 
 	//Insert ssh and gpg keys
 	k := &sdk.ApplicationKey{
@@ -696,12 +692,12 @@ func Test_getWorkflowPushHandler(t *testing.T) {
 	}
 
 	kpgp, err := keys.GeneratePGPKeyPair(k.Name)
-	test.NoError(t, err)
+	require.NoError(t, err)
 
 	k.Public = kpgp.Public
 	k.Private = kpgp.Private
 	k.KeyID = kpgp.KeyID
-	test.NoError(t, application.InsertKey(api.mustDB(), k))
+	require.NoError(t, application.InsertKey(api.mustDB(), k))
 
 	k2 := &sdk.ApplicationKey{
 		Name:          "app-mykey-ssh",
@@ -709,12 +705,12 @@ func Test_getWorkflowPushHandler(t *testing.T) {
 		ApplicationID: app.ID,
 	}
 	kssh, errK := keys.GenerateSSHKey(k2.Name)
-	test.NoError(t, errK)
+	require.NoError(t, errK)
 
 	k2.Public = kssh.Public
 	k2.Private = kssh.Private
 	k2.KeyID = kssh.KeyID
-	test.NoError(t, application.InsertKey(api.mustDB(), k2))
+	require.NoError(t, application.InsertKey(api.mustDB(), k2))
 
 	w := sdk.Workflow{
 		Name:       "test_1",
@@ -743,7 +739,7 @@ func Test_getWorkflowPushHandler(t *testing.T) {
 		},
 	}
 
-	proj, _ = project.Load(api.mustDB(), api.Cache, proj.Key, project.LoadOptions.WithPipelines, project.LoadOptions.WithApplications)
+	proj, _ = project.Load(api.mustDB(), proj.Key, project.LoadOptions.WithPipelines, project.LoadOptions.WithApplications)
 
 	test.NoError(t, workflow.Insert(context.TODO(), api.mustDB(), api.Cache, *proj, &w))
 	test.NoError(t, workflow.RenameNode(context.TODO(), api.mustDB(), &w))
@@ -913,7 +909,7 @@ metadata:
 	api.Router.Mux.ServeHTTP(rec, req)
 	assert.Equal(t, 200, rec.Code)
 
-	p, errP := project.Load(db, api.Cache, proj.Key)
+	p, errP := project.Load(db, proj.Key)
 	assert.NoError(t, errP)
 	wUpdated, err := workflow.Load(context.TODO(), db, api.Cache, *p, "test_1", workflow.LoadOptions{})
 	assert.NoError(t, err)

@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/ovh/cds/engine/worker/internal"
@@ -37,6 +40,10 @@ func runCmd() func(cmd *cobra.Command, args []string) {
 		// Get the booked job ID
 		bookedWJobID := FlagInt64(cmd, flagBookedWorkflowJobID)
 
+		if bookedWJobID == 0 {
+			sdk.Exit("flag --booked-workflow-job-id is mandatory")
+		}
+
 		ctx, cancel := context.WithCancel(ctx)
 		// Gracefully shutdown connections
 		c := make(chan os.Signal, 1)
@@ -58,6 +65,13 @@ func runCmd() func(cmd *cobra.Command, args []string) {
 		}()
 		// Start the worker
 		if err := internal.StartWorker(ctx, w, bookedWJobID); err != nil {
+			isErrWithStack := sdk.IsErrorWithStack(err)
+			fields := logrus.Fields{}
+			if isErrWithStack {
+				fields["stack_trace"] = fmt.Sprintf("%+v", err)
+			}
+			log.ErrorWithFields(ctx, fields, "%v", err)
+			time.Sleep(2 * time.Second)
 			sdk.Exit("error: %v", err)
 		}
 	}

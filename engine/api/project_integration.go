@@ -20,18 +20,32 @@ func (api *API) getProjectIntegrationHandler() service.Handler {
 		projectKey := vars[permProjectKey]
 		integrationName := vars["integrationName"]
 
-		clearPassword := FormBool(r, "clearPassword")
+		var integ sdk.ProjectIntegration
+		var err error
 
-		integration, err := integration.LoadProjectIntegrationByName(api.mustDB(), projectKey, integrationName, clearPassword)
-		if err != nil {
-			return sdk.WrapError(err, "Cannot load integration %s/%s", projectKey, integrationName)
+		clearPassword := FormBool(r, "clearPassword")
+		if clearPassword {
+			if !isService(ctx) && !isWorker(ctx) {
+				return sdk.WithStack(sdk.ErrForbidden)
+			}
+			integ, err = integration.LoadProjectIntegrationByNameWithClearPassword(api.mustDB(), projectKey, integrationName)
+			if err != nil {
+				return sdk.WrapError(err, "Cannot load integration %s/%s", projectKey, integrationName)
+			}
+		} else {
+			integ, err = integration.LoadProjectIntegrationByName(api.mustDB(), projectKey, integrationName)
+			if err != nil {
+				return sdk.WrapError(err, "Cannot load integration %s/%s", projectKey, integrationName)
+			}
 		}
-		plugins, err := plugin.LoadAllByIntegrationModelID(api.mustDB(), integration.IntegrationModelID)
+
+		plugins, err := plugin.LoadAllByIntegrationModelID(api.mustDB(), integ.IntegrationModelID)
 		if err != nil {
-			return sdk.WrapError(err, "Cannot load integration %s/%s", projectKey, integrationName)
+			return sdk.WrapError(err, "Cannot load integration plugin %s/%s", projectKey, integrationName)
 		}
-		integration.GRPCPlugins = plugins
-		return service.WriteJSON(w, integration, http.StatusOK)
+		integ.GRPCPlugins = plugins
+
+		return service.WriteJSON(w, integ, http.StatusOK)
 	}
 }
 
@@ -46,12 +60,12 @@ func (api *API) putProjectIntegrationHandler() service.Handler {
 			return sdk.WrapError(err, "Cannot read body")
 		}
 
-		p, err := project.Load(api.mustDB(), api.Cache, projectKey)
+		p, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "Cannot load project")
 		}
 
-		ppDB, errP := integration.LoadProjectIntegrationByName(api.mustDB(), projectKey, integrationName, true)
+		ppDB, errP := integration.LoadProjectIntegrationByNameWithClearPassword(api.mustDB(), projectKey, integrationName)
 		if errP != nil {
 			return sdk.WrapError(errP, "putProjectIntegrationHandler> Cannot load integration %s for project %s", integrationName, projectKey)
 		}
@@ -115,7 +129,7 @@ func (api *API) putProjectIntegrationHandler() service.Handler {
 		}
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "Cannot commit transaction")
+			return sdk.WithStack(err)
 		}
 
 		event.PublishUpdateProjectIntegration(ctx, p, projectIntegration, ppDB, getAPIConsumer(ctx))
@@ -130,7 +144,7 @@ func (api *API) deleteProjectIntegrationHandler() service.Handler {
 		projectKey := vars[permProjectKey]
 		integrationName := vars["integrationName"]
 
-		p, err := project.Load(api.mustDB(), api.Cache, projectKey, project.LoadOptions.WithIntegrations)
+		p, err := project.Load(api.mustDB(), projectKey, project.LoadOptions.WithIntegrations)
 		if err != nil {
 			return sdk.WrapError(err, "Cannot load project")
 		}
@@ -157,7 +171,7 @@ func (api *API) deleteProjectIntegrationHandler() service.Handler {
 		}
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "Cannot commit transaction")
+			return sdk.WithStack(err)
 		}
 
 		if deletedIntegration.Model.Event {
@@ -173,7 +187,7 @@ func (api *API) getProjectIntegrationsHandler() service.Handler {
 		vars := mux.Vars(r)
 		projectKey := vars[permProjectKey]
 
-		p, errP := project.Load(api.mustDB(), api.Cache, projectKey, project.LoadOptions.WithIntegrations)
+		p, errP := project.Load(api.mustDB(), projectKey, project.LoadOptions.WithIntegrations)
 		if errP != nil {
 			return sdk.WrapError(errP, "getProjectIntegrationsHandler> Cannot load project")
 		}
@@ -186,7 +200,7 @@ func (api *API) postProjectIntegrationHandler() service.Handler {
 		vars := mux.Vars(r)
 		projectKey := vars[permProjectKey]
 
-		p, err := project.Load(api.mustDB(), api.Cache, projectKey, project.LoadOptions.WithIntegrations)
+		p, err := project.Load(api.mustDB(), projectKey, project.LoadOptions.WithIntegrations)
 		if err != nil {
 			return sdk.WrapError(err, "Cannot load project")
 		}
@@ -243,7 +257,7 @@ func (api *API) postProjectIntegrationHandler() service.Handler {
 		}
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "Cannot commit transaction")
+			return sdk.WithStack(err)
 		}
 
 		event.PublishAddProjectIntegration(ctx, p, pp, getAPIConsumer(ctx))

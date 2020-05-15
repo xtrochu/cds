@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/sguiheux/go-coverage"
 
 	"github.com/ovh/cds/sdk"
@@ -144,6 +145,7 @@ type EnvironmentVariableClient interface {
 type EventsClient interface {
 	// Must be  run in a go routine
 	EventsListen(ctx context.Context, chanSSEvt chan<- SSEvent)
+	WebsocketEventsListen(ctx context.Context, chanMsgToSend <-chan sdk.WebsocketFilter, chanMsgReceived chan<- sdk.WebsocketEvent)
 }
 
 // DownloadClient exposes download related functions
@@ -292,7 +294,7 @@ type HookClient interface {
 
 // WorkflowClient exposes workflows functions
 type WorkflowClient interface {
-	WorkflowList(projectKey string) ([]sdk.Workflow, error)
+	WorkflowList(projectKey string, opts ...RequestModifier) ([]sdk.Workflow, error)
 	WorkflowGet(projectKey, name string, opts ...RequestModifier) (*sdk.Workflow, error)
 	WorkflowUpdate(projectKey, name string, wf *sdk.Workflow) error
 	WorkflowDelete(projectKey string, workflowName string) error
@@ -319,7 +321,6 @@ type WorkflowClient interface {
 	WorkflowAllHooksList() ([]sdk.NodeHook, error)
 	WorkflowCachePush(projectKey, integrationName, ref string, tarContent io.Reader, size int) error
 	WorkflowCachePull(projectKey, integrationName, ref string) (io.Reader, error)
-	WorkflowTemplateInstanceGet(projectKey, workflowName string) (*sdk.WorkflowTemplateInstance, error)
 	WorkflowTransformAsCode(projectKey, workflowName string) (*sdk.Operation, error)
 	WorkflowTransformAsCodeFollow(projectKey, workflowName string, ope *sdk.Operation) error
 }
@@ -342,6 +343,7 @@ type IntegrationClient interface {
 }
 
 // Interface is the main interface for cdsclient package
+// generate mock with "mockgen -source=interface.go -destination=mock_cdsclient/interface_mock.go Interface" from directory ${GOPATH}/src/github.com/ovh/cds/sdk/cdsclient
 type Interface interface {
 	Raw
 	AuthClient
@@ -381,6 +383,7 @@ type WorkerInterface interface {
 	ProjectIntegrationGet(projectKey string, integrationName string, clearPassword bool) (sdk.ProjectIntegration, error)
 	QueueClient
 	Requirements() ([]sdk.Requirement, error)
+	ServiceConfigurationGet(context.Context, string) ([]sdk.ServiceConfiguration, error)
 	WorkerClient
 	WorkflowRunArtifacts(projectKey string, name string, number int64) ([]sdk.WorkflowNodeRunArtifact, error)
 	WorkflowCachePush(projectKey, integrationName, ref string, tarContent io.Reader, size int) error
@@ -400,6 +403,7 @@ type Raw interface {
 	Request(ctx context.Context, method string, path string, body io.Reader, mods ...RequestModifier) ([]byte, http.Header, int, error)
 	HTTPClient() *http.Client
 	HTTPSSEClient() *http.Client
+	HTTPWebsocketClient() *websocket.Dialer
 }
 
 // GRPCPluginsClient exposes plugins API
@@ -494,6 +498,15 @@ func WithKeys() RequestModifier {
 	return func(r *http.Request) {
 		q := r.URL.Query()
 		q.Set("withKeys", "true")
+		r.URL.RawQuery = q.Encode()
+	}
+}
+
+// WithTemplate allow a provider to retrieve a workflow with template if exists.
+func WithTemplate() RequestModifier {
+	return func(r *http.Request) {
+		q := r.URL.Query()
+		q.Set("withTemplate", "true")
 		r.URL.RawQuery = q.Encode()
 	}
 }

@@ -38,7 +38,7 @@ func TestDAO(t *testing.T) {
 		Status:     sdk.StatusWaiting,
 	}
 
-	if err := worker.Insert(db, w); err != nil {
+	if err := worker.Insert(context.TODO(), db, w); err != nil {
 		t.Fatalf("Cannot insert worker %+v: %v", w, err)
 	}
 
@@ -57,7 +57,7 @@ func TestDAO(t *testing.T) {
 		assert.Equal(t, "foofoo", wk.ID)
 	}
 
-	test.NoError(t, worker.SetStatus(db, wk.ID, sdk.StatusBuilding))
+	test.NoError(t, worker.SetStatus(context.TODO(), db, wk.ID, sdk.StatusBuilding))
 	test.NoError(t, worker.RefreshWorker(db, wk.ID))
 }
 
@@ -95,4 +95,18 @@ func TestRegister(t *testing.T) {
 	assert.Equal(t, w.ID, wk.ID)
 	assert.Equal(t, w.ModelID, wk.ModelID)
 	assert.Equal(t, w.HatcheryID, wk.HatcheryID)
+
+	// try to register a worker for a job, without a JobID
+	w2, err := worker.RegisterWorker(context.TODO(), db, store, hatchery.SpawnArguments{
+		HatcheryName: h.Name,
+		Model:        m,
+		WorkerName:   sdk.RandomString(10),
+	}, h.ID, c, sdk.WorkerRegistrationForm{
+		Arch:               runtime.GOARCH,
+		OS:                 runtime.GOOS,
+		BinaryCapabilities: []string{"bash"},
+	})
+
+	test.Error(t, err)
+	assert.Nil(t, w2)
 }

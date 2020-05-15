@@ -21,7 +21,6 @@ import (
 	"github.com/ovh/cds/engine/api/project"
 	"github.com/ovh/cds/engine/api/services"
 	"github.com/ovh/cds/engine/api/workflow"
-	"github.com/ovh/cds/engine/api/workflowtemplate"
 	"github.com/ovh/cds/engine/service"
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/exportentities"
@@ -33,10 +32,38 @@ func (api *API) getWorkflowsHandler() service.Handler {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 		vars := mux.Vars(r)
 		key := vars[permProjectKey]
+		filterByRepo := r.FormValue("repo")
 
 		ws, err := workflow.LoadAll(api.mustDB(), key)
 		if err != nil {
 			return err
+		}
+
+		proj, err := project.Load(api.mustDB(), key)
+		if err != nil {
+			return err
+		}
+
+		if filterByRepo != "" {
+			mapApps := make(map[int64]sdk.Application)
+			apps, err := application.LoadAll(ctx, api.mustDB(), proj.ID)
+			if err != nil {
+				return err
+			}
+
+			for _, app := range apps {
+				mapApps[app.ID] = app
+			}
+
+			ws = ws.Filter(
+				func(w sdk.Workflow) bool {
+					if w.WorkflowData.Node.Context != nil {
+						app, _ := mapApps[w.WorkflowData.Node.Context.ApplicationID]
+						return app.RepositoryFullname == filterByRepo
+					}
+					return false
+				},
+			)
 		}
 
 		names := ws.Names()
@@ -73,8 +100,9 @@ func (api *API) getWorkflowHandler() service.Handler {
 		withTemplate := FormBool(r, "withTemplate")
 		withAsCodeEvents := FormBool(r, "withAsCodeEvents")
 		minimal := FormBool(r, "minimal")
+		withoutIcons := FormBool(r, "withoutIcons")
 
-		proj, err := project.Load(api.mustDB(), api.Cache, key, project.LoadOptions.WithIntegrations)
+		proj, err := project.Load(api.mustDB(), key, project.LoadOptions.WithIntegrations)
 		if err != nil {
 			return sdk.WrapError(err, "unable to load projet")
 		}
@@ -82,10 +110,11 @@ func (api *API) getWorkflowHandler() service.Handler {
 		opts := workflow.LoadOptions{
 			Minimal:               minimal, // if true, load only data from table workflow, not pipelines, app, env...
 			DeepPipeline:          withDeepPipelines,
-			WithIcon:              true,
+			WithIcon:              !withoutIcons,
 			WithLabels:            withLabels,
 			WithAsCodeUpdateEvent: withAsCodeEvents,
 			WithIntegrations:      true,
+			WithTemplate:          withTemplate,
 		}
 		w1, err := workflow.Load(ctx, api.mustDB(), api.Cache, *proj, name, opts)
 		if err != nil {
@@ -98,7 +127,7 @@ func (api *API) getWorkflowHandler() service.Handler {
 		}
 
 		if withUsage {
-			usage, err := loadWorkflowUsage(api.mustDB(), w1.ID)
+			usage, err := loadWorkflowUsage(ctx, api.mustDB(), w1.ID)
 			if err != nil {
 				return sdk.WrapError(err, "cannot load usage for workflow %s", name)
 			}
@@ -111,21 +140,6 @@ func (api *API) getWorkflowHandler() service.Handler {
 				return sdk.WrapError(err, "cannot load audits for workflow %s", name)
 			}
 			w1.Audits = audits
-		}
-
-		if withTemplate {
-			if err := workflowtemplate.AggregateTemplateInstanceOnWorkflow(ctx, api.mustDB(), w1); err != nil {
-				return err
-			}
-			if w1.TemplateInstance != nil {
-				if err := workflowtemplate.LoadInstanceOptions.WithTemplate(ctx, api.mustDB(), w1.TemplateInstance); err != nil {
-					return err
-				}
-				if w1.TemplateInstance.Template != nil {
-					w1.FromTemplate = fmt.Sprintf("%s@%d", w1.TemplateInstance.Template.Path(), w1.TemplateInstance.WorkflowTemplateVersion)
-					w1.TemplateUpToDate = w1.TemplateInstance.Template.Version == w1.TemplateInstance.WorkflowTemplateVersion
-				}
-			}
 		}
 
 		if isAdmin(ctx) {
@@ -150,7 +164,7 @@ func (api *API) getWorkflowHandler() service.Handler {
 	}
 }
 
-func loadWorkflowUsage(db gorp.SqlExecutor, workflowID int64) (sdk.Usage, error) {
+func loadWorkflowUsage(ctx context.Context, db gorp.SqlExecutor, workflowID int64) (sdk.Usage, error) {
 	usage := sdk.Usage{}
 	pips, errP := pipeline.LoadByWorkflowID(db, workflowID)
 	if errP != nil {
@@ -164,7 +178,7 @@ func loadWorkflowUsage(db gorp.SqlExecutor, workflowID int64) (sdk.Usage, error)
 	}
 	usage.Environments = envs
 
-	apps, errA := application.LoadByWorkflowID(db, workflowID)
+	apps, errA := application.LoadByWorkflowID(ctx, db, workflowID)
 	if errA != nil {
 		return usage, sdk.WrapError(errA, "Cannot load applications linked to a workflow id %d", workflowID)
 	}
@@ -186,7 +200,7 @@ func (api *API) postWorkflowRollbackHandler() service.Handler {
 		db := api.mustDB()
 		u := getAPIConsumer(ctx)
 
-		proj, err := project.Load(db, api.Cache, key,
+		proj, err := project.Load(db, key,
 			project.LoadOptions.WithGroups,
 			project.LoadOptions.WithApplications,
 			project.LoadOptions.WithEnvironments,
@@ -227,7 +241,7 @@ func (api *API) postWorkflowRollbackHandler() service.Handler {
 		}
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "cannot commit transaction")
+			return sdk.WithStack(err)
 		}
 
 		newWf.Permissions.Readable = true
@@ -253,7 +267,7 @@ func (api *API) postWorkflowLabelHandler() service.Handler {
 			return sdk.WrapError(err, "cannot read body")
 		}
 
-		proj, err := project.Load(db, api.Cache, key,
+		proj, err := project.Load(db, key,
 			project.LoadOptions.WithApplicationWithDeploymentStrategies,
 			project.LoadOptions.WithPipelines,
 			project.LoadOptions.WithEnvironments,
@@ -303,7 +317,7 @@ func (api *API) postWorkflowLabelHandler() service.Handler {
 		newWf.Labels = append(newWf.Labels, label)
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "cannot commit transaction")
+			return sdk.WithStack(err)
 		}
 
 		return service.WriteJSON(w, label, http.StatusOK)
@@ -323,7 +337,7 @@ func (api *API) deleteWorkflowLabelHandler() service.Handler {
 
 		db := api.mustDB()
 
-		proj, err := project.Load(db, api.Cache, key,
+		proj, err := project.Load(db, key,
 			project.LoadOptions.WithApplicationWithDeploymentStrategies,
 			project.LoadOptions.WithPipelines,
 			project.LoadOptions.WithEnvironments,
@@ -353,7 +367,7 @@ func (api *API) postWorkflowHandler() service.Handler {
 		vars := mux.Vars(r)
 		key := vars[permProjectKey]
 
-		p, err := project.Load(api.mustDB(), api.Cache, key,
+		p, err := project.Load(api.mustDB(), key,
 			project.LoadOptions.WithApplicationWithDeploymentStrategies,
 			project.LoadOptions.WithPipelines,
 			project.LoadOptions.WithEnvironments,
@@ -386,7 +400,7 @@ func (api *API) postWorkflowHandler() service.Handler {
 		}
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "cannot commit transaction")
+			return sdk.WithStack(err)
 		}
 
 		wf, err := workflow.LoadByID(ctx, api.mustDB(), api.Cache, *p, data.ID, workflow.LoadOptions{})
@@ -414,7 +428,7 @@ func (api *API) putWorkflowHandler() service.Handler {
 		key := vars["key"]
 		name := vars["permWorkflowName"]
 
-		p, err := project.Load(api.mustDB(), api.Cache, key,
+		p, err := project.Load(api.mustDB(), key,
 			project.LoadOptions.WithApplicationWithDeploymentStrategies,
 			project.LoadOptions.WithPipelines,
 			project.LoadOptions.WithEnvironments,
@@ -468,7 +482,7 @@ func (api *API) putWorkflowHandler() service.Handler {
 		}
 
 		if err := tx.Commit(); err != nil {
-			return sdk.WrapError(err, "cannot commit transaction")
+			return sdk.WithStack(err)
 		}
 
 		wf1, err := workflow.LoadByID(ctx, api.mustDB(), api.Cache, *p, wf.ID, workflow.LoadOptions{WithIntegrations: true})
@@ -482,7 +496,7 @@ func (api *API) putWorkflowHandler() service.Handler {
 		wf1.Permissions.Writable = true
 		wf1.Permissions.Executable = true
 
-		usage, err := loadWorkflowUsage(api.mustDB(), wf1.ID)
+		usage, err := loadWorkflowUsage(ctx, api.mustDB(), wf1.ID)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load usage")
 		}
@@ -501,7 +515,7 @@ func (api *API) putWorkflowIconHandler() service.Handler {
 		key := vars["key"]
 		name := vars["permWorkflowName"]
 
-		p, errP := project.Load(api.mustDB(), api.Cache, key)
+		p, errP := project.Load(api.mustDB(), key)
 		if errP != nil {
 			return errP
 		}
@@ -542,7 +556,7 @@ func (api *API) deleteWorkflowIconHandler() service.Handler {
 		key := vars["key"]
 		name := vars["permWorkflowName"]
 
-		p, errP := project.Load(api.mustDB(), api.Cache, key)
+		p, errP := project.Load(api.mustDB(), key)
 		if errP != nil {
 			return errP
 		}
@@ -567,7 +581,7 @@ func (api *API) deleteWorkflowHandler() service.Handler {
 		key := vars["key"]
 		name := vars["permWorkflowName"]
 
-		p, errP := project.Load(api.mustDB(), api.Cache, key, project.LoadOptions.WithIntegrations)
+		p, errP := project.Load(api.mustDB(), key, project.LoadOptions.WithIntegrations)
 		if errP != nil {
 			return sdk.WrapError(errP, "Cannot load Project %s", key)
 		}
@@ -636,7 +650,7 @@ func (api *API) deleteWorkflowEventsIntegrationHandler() service.Handler {
 			return sdk.WrapError(sdk.ErrInvalidID, "integration id is not correct (%s) : %v", prjIntegrationIDStr, err)
 		}
 
-		p, err := project.Load(db, api.Cache, key, project.LoadOptions.WithIntegrations)
+		p, err := project.Load(db, key, project.LoadOptions.WithIntegrations)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load Project %s", key)
 		}
@@ -661,7 +675,7 @@ func (api *API) getWorkflowHookHandler() service.Handler {
 		name := vars["permWorkflowName"]
 		uuid := vars["uuid"]
 
-		proj, err := project.Load(api.mustDB(), api.Cache, key,
+		proj, err := project.Load(api.mustDB(), key,
 			project.LoadOptions.WithIntegrations,
 			project.LoadOptions.WithApplicationWithDeploymentStrategies,
 			project.LoadOptions.WithPipelines,
