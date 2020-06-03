@@ -144,7 +144,6 @@ type EnvironmentVariableClient interface {
 // EventsClient listen SSE Events from CDS API
 type EventsClient interface {
 	// Must be  run in a go routine
-	EventsListen(ctx context.Context, chanSSEvt chan<- SSEvent)
 	WebsocketEventsListen(ctx context.Context, chanMsgToSend <-chan sdk.WebsocketFilter, chanMsgReceived chan<- sdk.WebsocketEvent)
 }
 
@@ -277,11 +276,12 @@ type WorkerClient interface {
 	WorkerUnregister(ctx context.Context) error
 	WorkerDisable(ctx context.Context, id string) error
 	WorkerModelAdd(name, modelType, patternName string, dockerModel *sdk.ModelDocker, vmModel *sdk.ModelVirtualMachine, groupID int64) (sdk.Model, error)
-	WorkerModel(groupName, name string) (sdk.Model, error)
+	WorkerModelGet(groupName, name string) (sdk.Model, error)
 	WorkerModelDelete(groupName, name string) error
 	WorkerModelSpawnError(groupName, name string, info sdk.SpawnErrorForm) error
-	WorkerModels(*WorkerModelFilter) ([]sdk.Model, error)
-	WorkerModelsEnabled() ([]sdk.Model, error)
+	WorkerModelList(*WorkerModelFilter) ([]sdk.Model, error)
+	WorkerModelEnabledList() ([]sdk.Model, error)
+	WorkerModelSecretList(groupName, name string) (sdk.WorkerModelSecrets, error)
 	WorkerRegister(ctx context.Context, authToken string, form sdk.WorkerRegistrationForm) (*sdk.Worker, bool, error)
 	WorkerSetStatus(ctx context.Context, status string) error
 }
@@ -294,6 +294,7 @@ type HookClient interface {
 
 // WorkflowClient exposes workflows functions
 type WorkflowClient interface {
+	WorkflowSearch(opts ...RequestModifier) ([]sdk.Workflow, error)
 	WorkflowList(projectKey string, opts ...RequestModifier) ([]sdk.Workflow, error)
 	WorkflowGet(projectKey, name string, opts ...RequestModifier) (*sdk.Workflow, error)
 	WorkflowUpdate(projectKey, name string, wf *sdk.Workflow) error
@@ -321,8 +322,8 @@ type WorkflowClient interface {
 	WorkflowAllHooksList() ([]sdk.NodeHook, error)
 	WorkflowCachePush(projectKey, integrationName, ref string, tarContent io.Reader, size int) error
 	WorkflowCachePull(projectKey, integrationName, ref string) (io.Reader, error)
-	WorkflowTransformAsCode(projectKey, workflowName string) (*sdk.Operation, error)
-	WorkflowTransformAsCodeFollow(projectKey, workflowName string, ope *sdk.Operation) error
+	WorkflowTransformAsCode(projectKey, workflowName, branch, message string) (*sdk.Operation, error)
+	WorkflowTransformAsCodeFollow(projectKey, workflowName, opeUUID string) (*sdk.Operation, error)
 }
 
 // MonitoringClient exposes monitoring functions

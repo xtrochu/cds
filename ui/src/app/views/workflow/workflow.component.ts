@@ -14,8 +14,8 @@ import { Project } from 'app/model/project.model';
 import { Workflow } from 'app/model/workflow.model';
 import { WorkflowCoreService } from 'app/service/workflow/workflow.core.service';
 import { WorkflowSidebarMode } from 'app/service/workflow/workflow.sidebar.store';
+import { AsCodeSaveModalComponent } from 'app/shared/ascode/save-modal/ascode.save-modal.component';
 import { AutoUnsubscribe } from 'app/shared/decorator/autoUnsubscribe';
-import { UpdateAsCodeComponent } from 'app/shared/modal/save-as-code/update.as.code.component';
 import { ToastService } from 'app/shared/toast/ToastService';
 import { WorkflowTemplateApplyModalComponent } from 'app/shared/workflow-template/apply-modal/workflow-template.apply-modal.component';
 import { ProjectState, ProjectStateModel } from 'app/store/project.state';
@@ -51,7 +51,6 @@ export class WorkflowComponent implements OnInit {
     workflowSubscription: Subscription;
 
     projectSubscription: Subscription;
-    dataRouteSubscription: Subscription;
     qpRouteSubscription: Subscription;
     paramsRouteSubscription: Subscription;
     eventsRouteSubscription: Subscription;
@@ -69,18 +68,16 @@ export class WorkflowComponent implements OnInit {
     asCodeEditorOpen = false;
 
     @ViewChild('updateAsCode')
-    saveAsCode: UpdateAsCodeComponent;
-    @ViewChild('popup')
-    popupFromlRepository: SuiPopup;
-    @ViewChildren(SuiPopupController) popups: QueryList<SuiPopupController>;
-    @ViewChildren(SuiPopupTemplateController) popups2: QueryList<SuiPopupTemplateController<SuiPopup>>;
+    saveAsCode: AsCodeSaveModalComponent;
+
+    @ViewChild('popupFromRepo')
+    popupFromRepository: SuiPopup;
+    @ViewChild('popupFromTemp')
+    popupFromTemplate: SuiPopup;
 
     selectedNodeID: number;
     selectedNodeRef: string;
     selectecHookRef: string;
-
-    showButtons = false;
-    loadingPopupButton = false;
 
     constructor(
         private _activatedRoute: ActivatedRoute,
@@ -90,9 +87,7 @@ export class WorkflowComponent implements OnInit {
         private _translate: TranslateService,
         private _store: Store,
         private _cd: ChangeDetectorRef
-    ) {
-
-    }
+    ) { }
 
     ngOnInit(): void {
         this.projectSubscription = this._store.select(ProjectState)
@@ -104,7 +99,7 @@ export class WorkflowComponent implements OnInit {
                 this._cd.detectChanges();
             });
 
-        this.sidebarSubs = this.sibebar$.subscribe( m => {
+        this.sidebarSubs = this.sibebar$.subscribe(m => {
             if (m === this.sidebarMode) {
                 return;
             }
@@ -149,7 +144,7 @@ export class WorkflowComponent implements OnInit {
             if (this.selectecHookRef) {
                 let h = Workflow.getHookByRef(this.selectecHookRef, this.workflow);
                 if (h) {
-                    this._store.dispatch(new SelectHook({hook: h, node: this.workflow.workflow_data.node}));
+                    this._store.dispatch(new SelectHook({ hook: h, node: this.workflow.workflow_data.node }));
                 }
             }
             this._cd.markForCheck();
@@ -180,7 +175,7 @@ export class WorkflowComponent implements OnInit {
 
     initRuns(key: string, workflowName: string, filters?: {}): void {
         this._store.dispatch(
-            new GetWorkflowRuns({projectKey: key, workflowName: workflowName, limit: '50', offset: '0', filters})
+            new GetWorkflowRuns({ projectKey: key, workflowName: workflowName, limit: '50', offset: '0', filters })
         );
     }
 
@@ -231,6 +226,7 @@ export class WorkflowComponent implements OnInit {
             this._toast.error('', this._translate.instant('application_repo_no'));
             return;
         }
+
 
         if (this.saveAsCode) {
             this.saveAsCode.show(null, 'workflow');

@@ -24,8 +24,7 @@ import (
 )
 
 func TestUpdateAsCodePipelineHandler(t *testing.T) {
-	api, db, _, end := newTestAPI(t)
-	defer end()
+	api, db, _ := newTestAPI(t)
 
 	u, pass := assets.InsertAdminUser(t, db)
 
@@ -92,6 +91,11 @@ func TestUpdateAsCodePipelineHandler(t *testing.T) {
 				if err := enc.Encode(hook); err != nil {
 					return writeError(w, err)
 				}
+			case "/vcs/github/repos/foo/myrepo/pullrequests?state=open":
+				vcsPRs := []sdk.VCSPullRequest{}
+				if err := enc.Encode(vcsPRs); err != nil {
+					return writeError(w, err)
+				}
 			case "/vcs/github/repos/foo/myrepo/pullrequests":
 				vcsPR := sdk.VCSPullRequest{
 					URL: "myURL",
@@ -125,13 +129,14 @@ func TestUpdateAsCodePipelineHandler(t *testing.T) {
 	// Create Project
 	pkey := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, api.Cache, pkey, pkey)
-	assert.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
-		Name: "github",
-		Data: map[string]string{
-			"token":  "foo",
-			"secret": "bar",
-		},
-	}))
+	vcsServer := sdk.ProjectVCSServerLink{
+		ProjectID: proj.ID,
+		Name:      "github",
+	}
+	vcsServer.Set("token", "foo")
+	vcsServer.Set("secret", "bar")
+	assert.NoError(t, repositoriesmanager.InsertProjectVCSServerLink(context.TODO(), db, &vcsServer))
+
 	wkf := assets.InsertTestWorkflow(t, db, api.Cache, proj, sdk.RandomString(10))
 
 	pip := sdk.Pipeline{

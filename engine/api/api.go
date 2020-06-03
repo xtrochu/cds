@@ -181,10 +181,11 @@ type Configuration struct {
 			Token        string `toml:"token" comment:"Token shared between Izanami and CDS to be able to send webhooks from izanami" json:"-"`
 		} `toml:"izanami" comment:"Feature flipping provider: https://maif.github.io/izanami" json:"izanami"`
 	} `toml:"features" comment:"###########################\n CDS Features flipping Settings \n##########################" json:"features"`
-	Services    []sdk.ServiceConfiguration `toml:"services" comment:"###########################\n CDS Services Settings \n##########################" json:"services"`
-	DefaultOS   string                     `toml:"defaultOS" default:"linux" comment:"if no model and os/arch is specified in your job's requirements then spawn worker on this operating system (example: freebsd, linux, windows)" json:"defaultOS"`
-	DefaultArch string                     `toml:"defaultArch" default:"amd64" comment:"if no model and no os/arch is specified in your job's requirements then spawn worker on this architecture (example: amd64, arm, 386)" json:"defaultArch"`
-	Graylog     struct {
+	Services      []sdk.ServiceConfiguration `toml:"services" comment:"###########################\n CDS Services Settings \n##########################" json:"services"`
+	DefaultOS     string                     `toml:"defaultOS" default:"linux" comment:"if no model and os/arch is specified in your job's requirements then spawn worker on this operating system (example: freebsd, linux, windows)" json:"defaultOS"`
+	DefaultArch   string                     `toml:"defaultArch" default:"amd64" comment:"if no model and no os/arch is specified in your job's requirements then spawn worker on this architecture (example: amd64, arm, 386)" json:"defaultArch"`
+	DefaultRegion string                     `toml:"defaultRegion" default:"" comment:"Optional. If no region in your job's requirements then spawn worker with this region. You need to have an hatchery managing this region." json:"defaultRegion"`
+	Graylog       struct {
 		AccessToken string `toml:"accessToken" json:"-"`
 		Stream      string `toml:"stream" json:"-"`
 		URL         string `toml:"url" comment:"Example: http://localhost:9000" json:"url"`
@@ -713,6 +714,18 @@ func (a *API) Serve(ctx context.Context) error {
 		return migrate.RefactorProjectIntegrationCrypto(ctx, a.DBConnectionFactory.GetDBMap())
 	}})
 
+	migrate.Add(ctx, sdk.Migration{Name: "AsCodeEventsWorkflowHolder", Release: "0.44.0", Blocker: false, Automatic: true, ExecFunc: func(ctx context.Context) error {
+		return migrate.RefactorAsCodeEventsWorkflowHolder(ctx, a.DBConnectionFactory.GetDBMap())
+	}})
+
+	migrate.Add(ctx, sdk.Migration{Name: "RefactorProjectVCSServerCrypto", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
+		return migrate.RefactorProjectVCSServers(ctx, a.DBConnectionFactory.GetDBMap())
+	}})
+
+	migrate.Add(ctx, sdk.Migration{Name: "RefactorWorkerModelCrypto", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
+		return migrate.RefactorWorkerModelCrypto(ctx, a.DBConnectionFactory.GetDBMap())
+	}})
+
 	isFreshInstall, errF := version.IsFreshInstall(a.mustDB())
 	if errF != nil {
 		return sdk.WrapError(errF, "Unable to check if it's a fresh installation of CDS")
@@ -800,7 +813,7 @@ func (a *API) Serve(ctx context.Context) error {
 		}, a.PanicDump())
 	sdk.GoRoutine(ctx, "workflow.Initialize",
 		func(ctx context.Context) {
-			workflow.Initialize(ctx, a.DBConnectionFactory.GetDBMap, a.Cache, a.Config.URL.UI, a.Config.DefaultOS, a.Config.DefaultArch)
+			workflow.Initialize(ctx, a.DBConnectionFactory.GetDBMap, a.Cache, a.Config.URL.UI, a.Config.DefaultOS, a.Config.DefaultArch, a.Config.DefaultRegion)
 		}, a.PanicDump())
 	sdk.GoRoutine(ctx, "PushInElasticSearch",
 		func(ctx context.Context) {

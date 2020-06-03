@@ -74,9 +74,9 @@ func (api *API) postTakeWorkflowJobHandler() service.Handler {
 		// Load worker model
 		var workerModelName string
 		if wk.ModelID != nil {
-			wm, err := workermodel.LoadByID(api.mustDB(), *wk.ModelID)
+			wm, err := workermodel.LoadByID(ctx, api.mustDB(), *wk.ModelID, workermodel.LoadOptions.Default)
 			if err != nil {
-				return sdk.WithStack(sdk.ErrNoWorkerModel)
+				return err
 			}
 			workerModelName = wm.Name
 		}
@@ -104,8 +104,8 @@ func (api *API) postTakeWorkflowJobHandler() service.Handler {
 			return sdk.WrapError(err, "cannot takeJob nodeJobRunID:%d", id)
 		}
 
-		if api.Config.CDN.TCP.Addr != "" && api.Config.CDN.TCP.Port > 0 {
-			pbji.GelfServiceAddr = fmt.Sprintf("%s:%d", api.Config.CDN.TCP.Addr, api.Config.CDN.TCP.Port)
+		if api.Config.CDN.PublicTCP != "" {
+			pbji.GelfServiceAddr = api.Config.CDN.PublicTCP
 		}
 		workflow.ResyncNodeRunsWithCommits(ctx, api.mustDB(), api.Cache, *p, report)
 		go WorkflowSendEvent(context.Background(), api.mustDB(), api.Cache, *p, report)
@@ -978,7 +978,10 @@ func (api *API) postWorkflowJobTestsResultsHandler() service.Handler {
 			}
 
 			// Get vcs info to known if we are on the default branch or not
-			projectVCSServer := repositoriesmanager.GetProjectVCSServer(*p, nr.VCSServer)
+			projectVCSServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, api.mustDB(), p.Key, nr.VCSServer)
+			if err != nil {
+				return sdk.WrapError(sdk.ErrNoReposManagerClientAuth, "cannot get client %s %s got: %v", p.Key, nr.VCSServer, err)
+			}
 			client, err := repositoriesmanager.AuthorizedClient(ctx, api.mustDB(), api.Cache, p.Key, projectVCSServer)
 			if err != nil {
 				log.Error(ctx, "postWorkflowJobTestsResultsHandler> Cannot get repo client %s : %v", nr.VCSServer, err)

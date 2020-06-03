@@ -47,8 +47,8 @@ func deleteAll(t *testing.T, api *API, key string) {
 }
 
 func TestInsertAndLoadPipelineWith1StageAnd0ActionWithoutCondition(t *testing.T) {
-	api, db, _, end := newTestAPI(t)
-	defer end()
+	api, db, _ := newTestAPI(t)
+
 	deleteAll(t, api, "TESTPIPELINESTAGES")
 
 	//Insert Project
@@ -99,8 +99,7 @@ func TestInsertAndLoadPipelineWith1StageAnd0ActionWithoutCondition(t *testing.T)
 }
 
 func TestInsertAndLoadPipelineWith1StageAnd1ActionWithoutCondition(t *testing.T) {
-	api, db, _, end := newTestAPI(t)
-	defer end()
+	api, db, _ := newTestAPI(t)
 
 	deleteAll(t, api, "TESTPIPELINESTAGES")
 
@@ -169,8 +168,7 @@ func TestInsertAndLoadPipelineWith1StageAnd1ActionWithoutCondition(t *testing.T)
 }
 
 func TestInsertAndLoadPipelineWith2StagesWithAnEmptyStageAtFirstFollowedBy2ActionsStageWithoutCondition(t *testing.T) {
-	api, db, _, end := newTestAPI(t)
-	defer end()
+	api, db, _ := newTestAPI(t)
 
 	deleteAll(t, api, "TESTPIPELINESTAGES")
 
@@ -275,8 +273,7 @@ func TestInsertAndLoadPipelineWith2StagesWithAnEmptyStageAtFirstFollowedBy2Actio
 }
 
 func TestInsertAndLoadPipelineWith1StageWithoutConditionAnd1StageWith2Conditions(t *testing.T) {
-	api, db, _, end := newTestAPI(t)
-	defer end()
+	api, db, _ := newTestAPI(t)
 
 	deleteAll(t, api, "TESTPIPELINESTAGES")
 
@@ -411,8 +408,7 @@ func TestInsertAndLoadPipelineWith1StageWithoutConditionAnd1StageWith2Conditions
 }
 
 func TestDeleteStageByIDShouldDeleteStageConditions(t *testing.T) {
-	api, db, _, end := newTestAPI(t)
-	defer end()
+	api, db, _ := newTestAPI(t)
 
 	deleteAll(t, api, "TESTPIPELINESTAGES")
 
@@ -472,8 +468,7 @@ func TestDeleteStageByIDShouldDeleteStageConditions(t *testing.T) {
 }
 
 func TestUpdateStageShouldUpdateStageConditions(t *testing.T) {
-	api, db, _, end := newTestAPI(t)
-	defer end()
+	api, db, _ := newTestAPI(t)
 
 	deleteAll(t, api, "TESTPIPELINESTAGES")
 

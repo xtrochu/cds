@@ -22,8 +22,8 @@ import (
 )
 
 func TestManualRun1(t *testing.T) {
-	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
-	defer end()
+	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
+
 	u, _ := assets.InsertAdminUser(t, db)
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -107,6 +107,7 @@ func TestManualRun1(t *testing.T) {
 	w1, err := workflow.Load(context.TODO(), db, cache, *proj, "test_1", workflow.LoadOptions{
 		DeepPipeline: true,
 	})
+	t.Logf("w1: %+v", w1)
 	require.NoError(t, err)
 
 	wr, errWR := workflow.CreateRun(db, w1, nil, u)
@@ -181,8 +182,8 @@ func TestManualRun1(t *testing.T) {
 }
 
 func TestManualRun2(t *testing.T) {
-	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
-	defer end()
+	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
+
 	u, _ := assets.InsertAdminUser(t, db)
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -300,8 +301,8 @@ func TestManualRun2(t *testing.T) {
 }
 
 func TestManualRun3(t *testing.T) {
-	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
-	defer end()
+	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
+
 	u, _ := assets.InsertAdminUser(t, db)
 	consumer, _ := authentication.LoadConsumerByTypeAndUserID(context.TODO(), db, sdk.ConsumerLocal, u.ID, authentication.LoadConsumerOptions.WithAuthentifiedUser)
 
@@ -400,7 +401,7 @@ func TestManualRun3(t *testing.T) {
 	require.NoError(t, plugin.Insert(db, &p))
 	assert.NotEqual(t, 0, p.ID)
 
-	model, _ := workermodel.LoadByNameAndGroupID(db, "TestManualRun", g.ID)
+	model, _ := workermodel.LoadByNameAndGroupID(context.TODO(), db, "TestManualRun", g.ID)
 	if model == nil {
 		model = &sdk.Model{
 			Name:    "TestManualRun",
@@ -418,7 +419,7 @@ func TestManualRun3(t *testing.T) {
 			},
 		}
 
-		if err := workermodel.Insert(db, model); err != nil {
+		if err := workermodel.Insert(context.TODO(), db, model); err != nil {
 			t.Fatalf("Error inserting model : %s", err)
 		}
 	}
@@ -826,8 +827,8 @@ queueRun:
 }
 
 func TestNoStage(t *testing.T) {
-	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
-	defer end()
+	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
+
 	u, _ := assets.InsertAdminUser(t, db)
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -896,8 +897,8 @@ func TestNoStage(t *testing.T) {
 }
 
 func TestNoJob(t *testing.T) {
-	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
-	defer end()
+	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
+
 	u, _ := assets.InsertAdminUser(t, db)
 	consumer, _ := authentication.LoadConsumerByTypeAndUserID(context.TODO(), db, sdk.ConsumerLocal, u.ID, authentication.LoadConsumerOptions.WithAuthentifiedUser)
 

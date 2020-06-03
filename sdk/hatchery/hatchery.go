@@ -151,10 +151,10 @@ func Create(ctx context.Context, h Interface) error {
 					observability.Tag(observability.TagWorkflowNodeJobRun, j.ID),
 				)
 
-				if _, ok := j.Header["SSE"]; ok {
-					log.Debug("hatchery> received job from SSE")
+				if _, ok := j.Header["WS"]; ok {
+					log.Debug("hatchery> received job from WS")
 					observability.Current(currentCtx,
-						observability.Tag("from", "sse"),
+						observability.Tag("from", "ws"),
 					)
 				}
 			}
@@ -178,8 +178,8 @@ func Create(ctx context.Context, h Interface) error {
 
 			stats.Record(currentCtx, GetMetrics().Jobs.M(1))
 
-			if _, ok := j.Header["SSE"]; ok {
-				stats.Record(currentCtx, GetMetrics().JobsSSE.M(1))
+			if _, ok := j.Header["WS"]; ok {
+				stats.Record(currentCtx, GetMetrics().JobsWebsocket.M(1))
 			}
 
 			//Check if the jobs is concerned by a pending worker creation
@@ -249,8 +249,13 @@ func Create(ctx context.Context, h Interface) error {
 			}
 
 			if chosenModel != nil {
-				//We got a model, let's start a worker
+				// We got a model, let's start a worker
 				workerRequest.model = chosenModel
+
+				// Interpolate model secrets
+				if err := ModelInterpolateSecrets(hWithModels, chosenModel); err != nil {
+					return err
+				}
 			}
 
 			//Ask to start
@@ -376,8 +381,8 @@ func canRunJobWithModel(ctx context.Context, h InterfaceWithModels, j workerStar
 			continue
 		}
 
-		if r.Type == sdk.OSArchRequirement && model.RegisteredOS != "" && model.RegisteredArch != "" && r.Value != (model.RegisteredOS+"/"+model.RegisteredArch) {
-			log.Debug("canRunJobWithModel> %d - job %d - job with OSArch requirement: cannot spawn on this OSArch. current model: %s/%s", j.timestamp, j.id, model.RegisteredOS, model.RegisteredArch)
+		if r.Type == sdk.OSArchRequirement && model.RegisteredOS != nil && *model.RegisteredOS != "" && model.RegisteredArch != nil && *model.RegisteredArch != "" && r.Value != (*model.RegisteredOS+"/"+*model.RegisteredArch) {
+			log.Debug("canRunJobWithModel> %d - job %d - job with OSArch requirement: cannot spawn on this OSArch. current model: %s/%s", j.timestamp, j.id, *model.RegisteredOS, *model.RegisteredArch)
 			return false
 		}
 

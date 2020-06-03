@@ -7,11 +7,9 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/ovh/cds/engine/api/application"
-	"github.com/ovh/cds/engine/api/ascode/sync"
+	"github.com/ovh/cds/engine/api/ascode"
 	"github.com/ovh/cds/engine/api/event"
 	"github.com/ovh/cds/engine/api/operation"
-	"github.com/ovh/cds/engine/api/permission"
 	"github.com/ovh/cds/engine/api/project"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
 	"github.com/ovh/cds/engine/api/workflow"
@@ -54,7 +52,10 @@ func (api *API) postImportAsCodeHandler() service.Handler {
 			return sdk.WrapError(err, "cannot load project")
 		}
 
-		vcsServer := repositoriesmanager.GetProjectVCSServer(*p, ope.VCSServer)
+		vcsServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, api.mustDB(), p.Key, ope.VCSServer)
+		if err != nil {
+			return err
+		}
 		client, err := repositoriesmanager.AuthorizedClient(ctx, api.mustDB(), api.Cache, p.Key, vcsServer)
 		if err != nil {
 			return sdk.NewErrorWithStack(err,
@@ -75,7 +76,8 @@ func (api *API) postImportAsCodeHandler() service.Handler {
 		if err := operation.PostRepositoryOperation(ctx, api.mustDB(), *p, ope, nil); err != nil {
 			return sdk.WrapError(err, "cannot create repository operation")
 		}
-		ope.RepositoryStrategy.SSHKeyContent = ""
+		ope.RepositoryStrategy.SSHKeyContent = sdk.PasswordPlaceholder
+		ope.RepositoryStrategy.Password = sdk.PasswordPlaceholder
 
 		return service.WriteJSON(w, ope, http.StatusCreated)
 	}
@@ -89,13 +91,12 @@ func (api *API) postImportAsCodeHandler() service.Handler {
 func (api *API) getImportAsCodeHandler() service.Handler {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 		vars := mux.Vars(r)
-		uuid := vars["uuid"]
-
-		var ope = new(sdk.Operation)
-		ope.UUID = uuid
-		if err := operation.GetRepositoryOperation(ctx, api.mustDB(), ope); err != nil {
-			return sdk.WrapError(err, "Cannot get repository operation status")
+		ope, err := operation.GetRepositoryOperation(ctx, api.mustDB(), vars["uuid"])
+		if err != nil {
+			return sdk.WrapError(err, "cannot get repository operation status")
 		}
+		ope.RepositoryStrategy.SSHKeyContent = sdk.PasswordPlaceholder
+		ope.RepositoryStrategy.Password = sdk.PasswordPlaceholder
 		return service.WriteJSON(w, ope, http.StatusOK)
 	}
 }
@@ -124,11 +125,9 @@ func (api *API) postPerformImportAsCodeHandler() service.Handler {
 			return sdk.WrapError(errp, "postPerformImportAsCodeHandler> Cannot load project %s", key)
 		}
 
-		var ope = new(sdk.Operation)
-		ope.UUID = uuid
-
-		if err := operation.GetRepositoryOperation(ctx, api.mustDB(), ope); err != nil {
-			return sdk.WrapError(err, "Unable to get repository operation")
+		ope, err := operation.GetRepositoryOperation(ctx, api.mustDB(), uuid)
+		if err != nil {
+			return sdk.WrapError(err, "unable to get repository operation")
 		}
 
 		if ope.Status != sdk.OperationStatusDone {
@@ -137,7 +136,7 @@ func (api *API) postPerformImportAsCodeHandler() service.Handler {
 
 		tr, err := workflow.ReadCDSFiles(ope.LoadFiles.Results)
 		if err != nil {
-			return sdk.WrapError(err, "Unable to read cds files")
+			return sdk.WrapError(err, "unable to read cds files")
 		}
 
 		//TODO: Delete branch and default branch
@@ -168,11 +167,14 @@ func (api *API) postPerformImportAsCodeHandler() service.Handler {
 		if opt.FromRepository != "" {
 			mods = append(mods, workflowtemplate.TemplateRequestModifiers.DefaultNameAndRepositories(ctx, api.mustDB(), api.Cache, *proj, opt.FromRepository))
 		}
-		wti, err := workflowtemplate.CheckAndExecuteTemplate(ctx, api.mustDB(), *consumer, *proj, &data, mods...)
+		var allMsg []sdk.Message
+		msgTemplate, wti, err := workflowtemplate.CheckAndExecuteTemplate(ctx, api.mustDB(), *consumer, *proj, &data, mods...)
+		allMsg = append(allMsg, msgTemplate...)
 		if err != nil {
 			return err
 		}
-		allMsg, wrkflw, _, err := workflow.Push(ctx, api.mustDB(), api.Cache, proj, data, opt, getAPIConsumer(ctx), project.DecryptWithBuiltinKey)
+		msgPush, wrkflw, _, err := workflow.Push(ctx, api.mustDB(), api.Cache, proj, data, opt, getAPIConsumer(ctx), project.DecryptWithBuiltinKey)
+		allMsg = append(allMsg, msgPush...)
 		if err != nil {
 			return sdk.WrapError(err, "unable to push workflow")
 		}
@@ -183,7 +185,10 @@ func (api *API) postPerformImportAsCodeHandler() service.Handler {
 
 		// Grant CDS as a repository collaborator
 		// TODO for this moment, this step is not mandatory. If it's failed, continue the ascode process
-		vcsServer := repositoriesmanager.GetProjectVCSServer(*proj, ope.VCSServer)
+		vcsServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, api.mustDB(), proj.Key, ope.VCSServer)
+		if err != nil {
+			return err
+		}
 		client, erra := repositoriesmanager.AuthorizedClient(ctx, api.mustDB(), api.Cache, proj.Key, vcsServer)
 		if erra != nil {
 			log.Error(ctx, "postPerformImportAsCodeHandler> Cannot get client for %s %s : %s", proj.Key, ope.VCSServer, erra)
@@ -204,54 +209,38 @@ func (api *API) postPerformImportAsCodeHandler() service.Handler {
 	}
 }
 
-func (api *API) postResyncPRAsCodeHandler() service.Handler {
+func (api *API) postWorkflowAsCodeEventsResyncHandler() service.Handler {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 		vars := mux.Vars(r)
-		projectKey := vars["key"] // we want to manually check the projet permission, for this POST only read is required.
-		appName := FormString(r, "appName")
-		fromRepo := FormString(r, "repo")
-
-		perms, err := permission.LoadProjectMaxLevelPermission(ctx, api.mustDB(), []string{projectKey}, getAPIConsumer(ctx).GetGroupIDs())
-		if err != nil {
-			return sdk.WrapError(err, "cannot get max project permissions for %s", projectKey)
-		}
-
-		callerPermission := perms.Level(projectKey)
-		// If the caller based on its group doesn't have enough permission level
-		if callerPermission < sdk.PermissionRead && !isMaintainer(ctx) {
-			return sdk.WithStack(sdk.ErrNotFound)
-		}
+		projectKey := vars["key"]
+		workflowName := vars["permWorkflowName"]
 
 		proj, err := project.Load(api.mustDB(), projectKey,
 			project.LoadOptions.WithApplicationWithDeploymentStrategies,
 			project.LoadOptions.WithPipelines,
 			project.LoadOptions.WithEnvironments,
 			project.LoadOptions.WithIntegrations,
-			project.LoadOptions.WithClearKeys)
+			project.LoadOptions.WithClearKeys,
+		)
 		if err != nil {
-			return sdk.WrapError(err, "unable to load project")
-		}
-		var app sdk.Application
-		switch {
-		case appName != "":
-			appP, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName)
-			if err != nil {
-				return err
-			}
-			app = *appP
-		case fromRepo != "":
-			wkf, err := workflow.LoadByRepo(ctx, api.Cache, api.mustDB(), *proj, fromRepo, workflow.LoadOptions{})
-			if err != nil {
-				return err
-			}
-			app = wkf.Applications[wkf.WorkflowData.Node.Context.ApplicationID]
-		default:
-			return sdk.WrapError(sdk.ErrWrongRequest, "Missing appName or repo query parameter")
-		}
-
-		if _, _, err := sync.SyncAsCodeEvent(ctx, api.mustDB(), api.Cache, *proj, app, getAPIConsumer(ctx).AuthentifiedUser); err != nil {
 			return err
 		}
+
+		wf, err := workflow.Load(ctx, api.mustDB(), api.Cache, *proj, workflowName, workflow.LoadOptions{})
+		if err != nil {
+			return err
+		}
+
+		res, err := ascode.SyncEvents(ctx, api.mustDB(), api.Cache, *proj, *wf, getAPIConsumer(ctx).AuthentifiedUser)
+		if err != nil {
+			return err
+		}
+		if res.Merged {
+			if err := workflow.UpdateFromRepository(api.mustDB(), wf.ID, res.FromRepository); err != nil {
+				return err
+			}
+		}
+
 		return nil
 	}
 }

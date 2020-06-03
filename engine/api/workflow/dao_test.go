@@ -34,8 +34,8 @@ import (
 )
 
 func TestLoadAllShouldNotReturnAnyWorkflows(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
+
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
 
@@ -47,8 +47,7 @@ func TestLoadAllShouldNotReturnAnyWorkflows(t *testing.T) {
 }
 
 func TestInsertSimpleWorkflowAndExport(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
 
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -109,8 +108,7 @@ func TestInsertSimpleWorkflowAndExport(t *testing.T) {
 }
 
 func TestInsertSimpleWorkflowWithWrongName(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
 
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -145,8 +143,7 @@ func TestInsertSimpleWorkflowWithWrongName(t *testing.T) {
 }
 
 func TestInsertSimpleWorkflowWithApplicationAndEnv(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
 
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -198,14 +195,15 @@ func TestInsertSimpleWorkflowWithApplicationAndEnv(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, w.ID, w1.ID)
+	require.NotNil(t, w.ID, w1.WorkflowData)
+	require.NotEqual(t, 0, w1.WorkflowData.Node.ID)
 	assert.Equal(t, w.WorkflowData.Node.Context.ApplicationID, w1.WorkflowData.Node.Context.ApplicationID)
 	assert.Equal(t, w.WorkflowData.Node.Context.EnvironmentID, w1.WorkflowData.Node.Context.EnvironmentID)
 	assert.Equal(t, w.WorkflowData.Node.Context.Mutex, w1.WorkflowData.Node.Context.Mutex)
 }
 
 func TestInsertComplexeWorkflowAndExport(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
 
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -345,8 +343,7 @@ func TestInsertComplexeWorkflowAndExport(t *testing.T) {
 }
 
 func TestInsertComplexeWorkflowWithBadOperator(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
 
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -479,8 +476,7 @@ func assertEqualNode(t *testing.T, n1, n2 *sdk.Node) {
 	}
 }
 func TestUpdateSimpleWorkflowWithApplicationEnvPipelineParametersAndPayload(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
 
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -611,8 +607,7 @@ func TestUpdateSimpleWorkflowWithApplicationEnvPipelineParametersAndPayload(t *t
 }
 
 func TestInsertComplexeWorkflowWithJoinsAndExport(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
 
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -829,8 +824,7 @@ func TestInsertComplexeWorkflowWithJoinsAndExport(t *testing.T) {
 }
 
 func TestInsertComplexeWorkflowWithComplexeJoins(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
 
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -1099,8 +1093,7 @@ func TestInsertComplexeWorkflowWithComplexeJoins(t *testing.T) {
 }
 
 func TestUpdateWorkflowWithJoins(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
 
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
@@ -1226,8 +1219,8 @@ func TestUpdateWorkflowWithJoins(t *testing.T) {
 }
 
 func TestInsertSimpleWorkflowWithHookAndExport(t *testing.T) {
-	db, cache, end := test.SetupPG(t)
-	defer end()
+	db, cache := test.SetupPG(t)
+
 	test.NoError(t, workflow.CreateBuiltinWorkflowHookModels(db))
 	test.NoError(t, workflow.CreateBuiltinWorkflowOutgoingHookModels(db))
 
@@ -1484,8 +1477,8 @@ func TestInsertSimpleWorkflowWithHookAndExport(t *testing.T) {
 }
 
 func TestInsertAndDeleteMultiHook(t *testing.T) {
-	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
-	defer end()
+	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
+
 	u, _ := assets.InsertAdminUser(t, db)
 	test.NoError(t, workflow.CreateBuiltinWorkflowHookModels(db))
 
@@ -1509,13 +1502,13 @@ func TestInsertAndDeleteMultiHook(t *testing.T) {
 	// Create project
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, cache, key, key)
-	assert.NoError(t, repositoriesmanager.InsertForProject(db, proj, &sdk.ProjectVCSServer{
-		Name: "github",
-		Data: map[string]string{
-			"token":  "foo",
-			"secret": "bar",
-		},
-	}))
+	vcsServer := sdk.ProjectVCSServerLink{
+		ProjectID: proj.ID,
+		Name:      "github",
+	}
+	vcsServer.Set("token", "foo")
+	vcsServer.Set("secret", "bar")
+	assert.NoError(t, repositoriesmanager.InsertProjectVCSServerLink(context.TODO(), db, &vcsServer))
 
 	srvs, err := services.LoadAll(context.Background(), db)
 	require.NoError(t, err)

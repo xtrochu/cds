@@ -18,7 +18,7 @@ import (
 
 type VCSEventMessenger struct {
 	commitsStatuses map[string][]sdk.VCSCommitStatus
-	vcsClient       sdk.VCSAuthorizedClient
+	vcsClient       sdk.VCSAuthorizedClientService
 }
 
 // ResyncCommitStatus resync commit status for a workflow run
@@ -86,8 +86,9 @@ loopNotif:
 	vcsServerName := wr.Workflow.Applications[node.Context.ApplicationID].VCSServer
 	repoFullName := wr.Workflow.Applications[node.Context.ApplicationID].RepositoryFullname
 
-	vcsServer := repositoriesmanager.GetProjectVCSServer(proj, vcsServerName)
-	if vcsServer == nil {
+	vcsServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, db, proj.Key, vcsServerName)
+	if err != nil {
+		log.Debug("SendVCSEvent> No vcsServer found: %v", err)
 		return nil
 	}
 

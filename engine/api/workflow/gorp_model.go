@@ -9,8 +9,21 @@ import (
 	"github.com/ovh/cds/sdk"
 )
 
+type Workflows []Workflow
+
+func (ws Workflows) Get() sdk.Workflows {
+	res := make(sdk.Workflows, len(ws))
+	for i, w := range ws {
+		res[i] = w.Get()
+	}
+	return res
+}
+
 // Workflow is a gorp wrapper around sdk.WorkflowData
-type Workflow sdk.Workflow
+type Workflow struct {
+	sdk.Workflow
+	ProjectKey string `db:"project_key"`
+}
 
 // Notification is a gorp wrapper around sdk.WorkflowNotification
 type Notification sdk.WorkflowNotification
@@ -173,6 +186,23 @@ func (j JobRun) WorkflowNodeRunJob() (sdk.WorkflowNodeJobRun, error) {
 				Name:  defaultOS + "/" + defaultArch,
 				Type:  sdk.OSArchRequirement,
 				Value: defaultOS + "/" + defaultArch,
+			})
+		}
+	}
+	if defaultRegion != "" {
+		var regionFound bool
+		for _, req := range jr.Job.Action.Requirements {
+			if req.Type == sdk.RegionRequirement {
+				regionFound = true
+				break
+			}
+		}
+
+		if !regionFound {
+			jr.Job.Action.Requirements = append(jr.Job.Action.Requirements, sdk.Requirement{
+				Name:  defaultRegion,
+				Type:  sdk.RegionRequirement,
+				Value: defaultRegion,
 			})
 		}
 	}

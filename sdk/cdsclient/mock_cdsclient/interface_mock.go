@@ -1709,18 +1709,6 @@ func (m *MockEventsClient) EXPECT() *MockEventsClientMockRecorder {
 	return m.recorder
 }
 
-// EventsListen mocks base method
-func (m *MockEventsClient) EventsListen(ctx context.Context, chanSSEvt chan<- cdsclient.SSEvent) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "EventsListen", ctx, chanSSEvt)
-}
-
-// EventsListen indicates an expected call of EventsListen
-func (mr *MockEventsClientMockRecorder) EventsListen(ctx, chanSSEvt interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EventsListen", reflect.TypeOf((*MockEventsClient)(nil).EventsListen), ctx, chanSSEvt)
-}
-
 // WebsocketEventsListen mocks base method
 func (m *MockEventsClient) WebsocketEventsListen(ctx context.Context, chanMsgToSend <-chan sdk.WebsocketFilter, chanMsgReceived chan<- sdk.WebsocketEvent) {
 	m.ctrl.T.Helper()
@@ -3376,19 +3364,19 @@ func (mr *MockWorkerClientMockRecorder) WorkerModelAdd(name, modelType, patternN
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelAdd", reflect.TypeOf((*MockWorkerClient)(nil).WorkerModelAdd), name, modelType, patternName, dockerModel, vmModel, groupID)
 }
 
-// WorkerModel mocks base method
-func (m *MockWorkerClient) WorkerModel(groupName, name string) (sdk.Model, error) {
+// WorkerModelGet mocks base method
+func (m *MockWorkerClient) WorkerModelGet(groupName, name string) (sdk.Model, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkerModel", groupName, name)
+	ret := m.ctrl.Call(m, "WorkerModelGet", groupName, name)
 	ret0, _ := ret[0].(sdk.Model)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// WorkerModel indicates an expected call of WorkerModel
-func (mr *MockWorkerClientMockRecorder) WorkerModel(groupName, name interface{}) *gomock.Call {
+// WorkerModelGet indicates an expected call of WorkerModelGet
+func (mr *MockWorkerClientMockRecorder) WorkerModelGet(groupName, name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModel", reflect.TypeOf((*MockWorkerClient)(nil).WorkerModel), groupName, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelGet", reflect.TypeOf((*MockWorkerClient)(nil).WorkerModelGet), groupName, name)
 }
 
 // WorkerModelDelete mocks base method
@@ -3419,34 +3407,49 @@ func (mr *MockWorkerClientMockRecorder) WorkerModelSpawnError(groupName, name, i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelSpawnError", reflect.TypeOf((*MockWorkerClient)(nil).WorkerModelSpawnError), groupName, name, info)
 }
 
-// WorkerModels mocks base method
-func (m *MockWorkerClient) WorkerModels(arg0 *cdsclient.WorkerModelFilter) ([]sdk.Model, error) {
+// WorkerModelList mocks base method
+func (m *MockWorkerClient) WorkerModelList(arg0 *cdsclient.WorkerModelFilter) ([]sdk.Model, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkerModels", arg0)
+	ret := m.ctrl.Call(m, "WorkerModelList", arg0)
 	ret0, _ := ret[0].([]sdk.Model)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// WorkerModels indicates an expected call of WorkerModels
-func (mr *MockWorkerClientMockRecorder) WorkerModels(arg0 interface{}) *gomock.Call {
+// WorkerModelList indicates an expected call of WorkerModelList
+func (mr *MockWorkerClientMockRecorder) WorkerModelList(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModels", reflect.TypeOf((*MockWorkerClient)(nil).WorkerModels), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelList", reflect.TypeOf((*MockWorkerClient)(nil).WorkerModelList), arg0)
 }
 
-// WorkerModelsEnabled mocks base method
-func (m *MockWorkerClient) WorkerModelsEnabled() ([]sdk.Model, error) {
+// WorkerModelEnabledList mocks base method
+func (m *MockWorkerClient) WorkerModelEnabledList() ([]sdk.Model, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkerModelsEnabled")
+	ret := m.ctrl.Call(m, "WorkerModelEnabledList")
 	ret0, _ := ret[0].([]sdk.Model)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// WorkerModelsEnabled indicates an expected call of WorkerModelsEnabled
-func (mr *MockWorkerClientMockRecorder) WorkerModelsEnabled() *gomock.Call {
+// WorkerModelEnabledList indicates an expected call of WorkerModelEnabledList
+func (mr *MockWorkerClientMockRecorder) WorkerModelEnabledList() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelsEnabled", reflect.TypeOf((*MockWorkerClient)(nil).WorkerModelsEnabled))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelEnabledList", reflect.TypeOf((*MockWorkerClient)(nil).WorkerModelEnabledList))
+}
+
+// WorkerModelSecretList mocks base method
+func (m *MockWorkerClient) WorkerModelSecretList(groupName, name string) (sdk.WorkerModelSecrets, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WorkerModelSecretList", groupName, name)
+	ret0, _ := ret[0].(sdk.WorkerModelSecrets)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WorkerModelSecretList indicates an expected call of WorkerModelSecretList
+func (mr *MockWorkerClientMockRecorder) WorkerModelSecretList(groupName, name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelSecretList", reflect.TypeOf((*MockWorkerClient)(nil).WorkerModelSecretList), groupName, name)
 }
 
 // WorkerRegister mocks base method
@@ -3554,6 +3557,25 @@ func NewMockWorkflowClient(ctrl *gomock.Controller) *MockWorkflowClient {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockWorkflowClient) EXPECT() *MockWorkflowClientMockRecorder {
 	return m.recorder
+}
+
+// WorkflowSearch mocks base method
+func (m *MockWorkflowClient) WorkflowSearch(opts ...cdsclient.RequestModifier) ([]sdk.Workflow, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "WorkflowSearch", varargs...)
+	ret0, _ := ret[0].([]sdk.Workflow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WorkflowSearch indicates an expected call of WorkflowSearch
+func (mr *MockWorkflowClientMockRecorder) WorkflowSearch(opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkflowSearch", reflect.TypeOf((*MockWorkflowClient)(nil).WorkflowSearch), opts...)
 }
 
 // WorkflowList mocks base method
@@ -3966,32 +3988,33 @@ func (mr *MockWorkflowClientMockRecorder) WorkflowCachePull(projectKey, integrat
 }
 
 // WorkflowTransformAsCode mocks base method
-func (m *MockWorkflowClient) WorkflowTransformAsCode(projectKey, workflowName string) (*sdk.Operation, error) {
+func (m *MockWorkflowClient) WorkflowTransformAsCode(projectKey, workflowName, branch, message string) (*sdk.Operation, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkflowTransformAsCode", projectKey, workflowName)
+	ret := m.ctrl.Call(m, "WorkflowTransformAsCode", projectKey, workflowName, branch, message)
 	ret0, _ := ret[0].(*sdk.Operation)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // WorkflowTransformAsCode indicates an expected call of WorkflowTransformAsCode
-func (mr *MockWorkflowClientMockRecorder) WorkflowTransformAsCode(projectKey, workflowName interface{}) *gomock.Call {
+func (mr *MockWorkflowClientMockRecorder) WorkflowTransformAsCode(projectKey, workflowName, branch, message interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkflowTransformAsCode", reflect.TypeOf((*MockWorkflowClient)(nil).WorkflowTransformAsCode), projectKey, workflowName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkflowTransformAsCode", reflect.TypeOf((*MockWorkflowClient)(nil).WorkflowTransformAsCode), projectKey, workflowName, branch, message)
 }
 
 // WorkflowTransformAsCodeFollow mocks base method
-func (m *MockWorkflowClient) WorkflowTransformAsCodeFollow(projectKey, workflowName string, ope *sdk.Operation) error {
+func (m *MockWorkflowClient) WorkflowTransformAsCodeFollow(projectKey, workflowName, opeUUID string) (*sdk.Operation, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkflowTransformAsCodeFollow", projectKey, workflowName, ope)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "WorkflowTransformAsCodeFollow", projectKey, workflowName, opeUUID)
+	ret0, _ := ret[0].(*sdk.Operation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // WorkflowTransformAsCodeFollow indicates an expected call of WorkflowTransformAsCodeFollow
-func (mr *MockWorkflowClientMockRecorder) WorkflowTransformAsCodeFollow(projectKey, workflowName, ope interface{}) *gomock.Call {
+func (mr *MockWorkflowClientMockRecorder) WorkflowTransformAsCodeFollow(projectKey, workflowName, opeUUID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkflowTransformAsCodeFollow", reflect.TypeOf((*MockWorkflowClient)(nil).WorkflowTransformAsCodeFollow), projectKey, workflowName, ope)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkflowTransformAsCodeFollow", reflect.TypeOf((*MockWorkflowClient)(nil).WorkflowTransformAsCodeFollow), projectKey, workflowName, opeUUID)
 }
 
 // MockMonitoringClient is a mock of MonitoringClient interface
@@ -5509,18 +5532,6 @@ func (m *MockInterface) EnvironmentKeysDelete(projectKey, envName, keyEnvName st
 func (mr *MockInterfaceMockRecorder) EnvironmentKeysDelete(projectKey, envName, keyEnvName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnvironmentKeysDelete", reflect.TypeOf((*MockInterface)(nil).EnvironmentKeysDelete), projectKey, envName, keyEnvName)
-}
-
-// EventsListen mocks base method
-func (m *MockInterface) EventsListen(ctx context.Context, chanSSEvt chan<- cdsclient.SSEvent) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "EventsListen", ctx, chanSSEvt)
-}
-
-// EventsListen indicates an expected call of EventsListen
-func (mr *MockInterfaceMockRecorder) EventsListen(ctx, chanSSEvt interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EventsListen", reflect.TypeOf((*MockInterface)(nil).EventsListen), ctx, chanSSEvt)
 }
 
 // WebsocketEventsListen mocks base method
@@ -7106,19 +7117,19 @@ func (mr *MockInterfaceMockRecorder) WorkerModelAdd(name, modelType, patternName
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelAdd", reflect.TypeOf((*MockInterface)(nil).WorkerModelAdd), name, modelType, patternName, dockerModel, vmModel, groupID)
 }
 
-// WorkerModel mocks base method
-func (m *MockInterface) WorkerModel(groupName, name string) (sdk.Model, error) {
+// WorkerModelGet mocks base method
+func (m *MockInterface) WorkerModelGet(groupName, name string) (sdk.Model, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkerModel", groupName, name)
+	ret := m.ctrl.Call(m, "WorkerModelGet", groupName, name)
 	ret0, _ := ret[0].(sdk.Model)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// WorkerModel indicates an expected call of WorkerModel
-func (mr *MockInterfaceMockRecorder) WorkerModel(groupName, name interface{}) *gomock.Call {
+// WorkerModelGet indicates an expected call of WorkerModelGet
+func (mr *MockInterfaceMockRecorder) WorkerModelGet(groupName, name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModel", reflect.TypeOf((*MockInterface)(nil).WorkerModel), groupName, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelGet", reflect.TypeOf((*MockInterface)(nil).WorkerModelGet), groupName, name)
 }
 
 // WorkerModelDelete mocks base method
@@ -7149,34 +7160,49 @@ func (mr *MockInterfaceMockRecorder) WorkerModelSpawnError(groupName, name, info
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelSpawnError", reflect.TypeOf((*MockInterface)(nil).WorkerModelSpawnError), groupName, name, info)
 }
 
-// WorkerModels mocks base method
-func (m *MockInterface) WorkerModels(arg0 *cdsclient.WorkerModelFilter) ([]sdk.Model, error) {
+// WorkerModelList mocks base method
+func (m *MockInterface) WorkerModelList(arg0 *cdsclient.WorkerModelFilter) ([]sdk.Model, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkerModels", arg0)
+	ret := m.ctrl.Call(m, "WorkerModelList", arg0)
 	ret0, _ := ret[0].([]sdk.Model)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// WorkerModels indicates an expected call of WorkerModels
-func (mr *MockInterfaceMockRecorder) WorkerModels(arg0 interface{}) *gomock.Call {
+// WorkerModelList indicates an expected call of WorkerModelList
+func (mr *MockInterfaceMockRecorder) WorkerModelList(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModels", reflect.TypeOf((*MockInterface)(nil).WorkerModels), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelList", reflect.TypeOf((*MockInterface)(nil).WorkerModelList), arg0)
 }
 
-// WorkerModelsEnabled mocks base method
-func (m *MockInterface) WorkerModelsEnabled() ([]sdk.Model, error) {
+// WorkerModelEnabledList mocks base method
+func (m *MockInterface) WorkerModelEnabledList() ([]sdk.Model, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkerModelsEnabled")
+	ret := m.ctrl.Call(m, "WorkerModelEnabledList")
 	ret0, _ := ret[0].([]sdk.Model)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// WorkerModelsEnabled indicates an expected call of WorkerModelsEnabled
-func (mr *MockInterfaceMockRecorder) WorkerModelsEnabled() *gomock.Call {
+// WorkerModelEnabledList indicates an expected call of WorkerModelEnabledList
+func (mr *MockInterfaceMockRecorder) WorkerModelEnabledList() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelsEnabled", reflect.TypeOf((*MockInterface)(nil).WorkerModelsEnabled))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelEnabledList", reflect.TypeOf((*MockInterface)(nil).WorkerModelEnabledList))
+}
+
+// WorkerModelSecretList mocks base method
+func (m *MockInterface) WorkerModelSecretList(groupName, name string) (sdk.WorkerModelSecrets, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WorkerModelSecretList", groupName, name)
+	ret0, _ := ret[0].(sdk.WorkerModelSecrets)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WorkerModelSecretList indicates an expected call of WorkerModelSecretList
+func (mr *MockInterfaceMockRecorder) WorkerModelSecretList(groupName, name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelSecretList", reflect.TypeOf((*MockInterface)(nil).WorkerModelSecretList), groupName, name)
 }
 
 // WorkerRegister mocks base method
@@ -7207,6 +7233,25 @@ func (m *MockInterface) WorkerSetStatus(ctx context.Context, status string) erro
 func (mr *MockInterfaceMockRecorder) WorkerSetStatus(ctx, status interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerSetStatus", reflect.TypeOf((*MockInterface)(nil).WorkerSetStatus), ctx, status)
+}
+
+// WorkflowSearch mocks base method
+func (m *MockInterface) WorkflowSearch(opts ...cdsclient.RequestModifier) ([]sdk.Workflow, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "WorkflowSearch", varargs...)
+	ret0, _ := ret[0].([]sdk.Workflow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WorkflowSearch indicates an expected call of WorkflowSearch
+func (mr *MockInterfaceMockRecorder) WorkflowSearch(opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkflowSearch", reflect.TypeOf((*MockInterface)(nil).WorkflowSearch), opts...)
 }
 
 // WorkflowList mocks base method
@@ -7619,32 +7664,33 @@ func (mr *MockInterfaceMockRecorder) WorkflowCachePull(projectKey, integrationNa
 }
 
 // WorkflowTransformAsCode mocks base method
-func (m *MockInterface) WorkflowTransformAsCode(projectKey, workflowName string) (*sdk.Operation, error) {
+func (m *MockInterface) WorkflowTransformAsCode(projectKey, workflowName, branch, message string) (*sdk.Operation, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkflowTransformAsCode", projectKey, workflowName)
+	ret := m.ctrl.Call(m, "WorkflowTransformAsCode", projectKey, workflowName, branch, message)
 	ret0, _ := ret[0].(*sdk.Operation)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // WorkflowTransformAsCode indicates an expected call of WorkflowTransformAsCode
-func (mr *MockInterfaceMockRecorder) WorkflowTransformAsCode(projectKey, workflowName interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) WorkflowTransformAsCode(projectKey, workflowName, branch, message interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkflowTransformAsCode", reflect.TypeOf((*MockInterface)(nil).WorkflowTransformAsCode), projectKey, workflowName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkflowTransformAsCode", reflect.TypeOf((*MockInterface)(nil).WorkflowTransformAsCode), projectKey, workflowName, branch, message)
 }
 
 // WorkflowTransformAsCodeFollow mocks base method
-func (m *MockInterface) WorkflowTransformAsCodeFollow(projectKey, workflowName string, ope *sdk.Operation) error {
+func (m *MockInterface) WorkflowTransformAsCodeFollow(projectKey, workflowName, opeUUID string) (*sdk.Operation, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkflowTransformAsCodeFollow", projectKey, workflowName, ope)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "WorkflowTransformAsCodeFollow", projectKey, workflowName, opeUUID)
+	ret0, _ := ret[0].(*sdk.Operation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // WorkflowTransformAsCodeFollow indicates an expected call of WorkflowTransformAsCodeFollow
-func (mr *MockInterfaceMockRecorder) WorkflowTransformAsCodeFollow(projectKey, workflowName, ope interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) WorkflowTransformAsCodeFollow(projectKey, workflowName, opeUUID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkflowTransformAsCodeFollow", reflect.TypeOf((*MockInterface)(nil).WorkflowTransformAsCodeFollow), projectKey, workflowName, ope)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkflowTransformAsCodeFollow", reflect.TypeOf((*MockInterface)(nil).WorkflowTransformAsCodeFollow), projectKey, workflowName, opeUUID)
 }
 
 // MonStatus mocks base method
@@ -8450,19 +8496,19 @@ func (mr *MockWorkerInterfaceMockRecorder) WorkerModelAdd(name, modelType, patte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelAdd", reflect.TypeOf((*MockWorkerInterface)(nil).WorkerModelAdd), name, modelType, patternName, dockerModel, vmModel, groupID)
 }
 
-// WorkerModel mocks base method
-func (m *MockWorkerInterface) WorkerModel(groupName, name string) (sdk.Model, error) {
+// WorkerModelGet mocks base method
+func (m *MockWorkerInterface) WorkerModelGet(groupName, name string) (sdk.Model, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkerModel", groupName, name)
+	ret := m.ctrl.Call(m, "WorkerModelGet", groupName, name)
 	ret0, _ := ret[0].(sdk.Model)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// WorkerModel indicates an expected call of WorkerModel
-func (mr *MockWorkerInterfaceMockRecorder) WorkerModel(groupName, name interface{}) *gomock.Call {
+// WorkerModelGet indicates an expected call of WorkerModelGet
+func (mr *MockWorkerInterfaceMockRecorder) WorkerModelGet(groupName, name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModel", reflect.TypeOf((*MockWorkerInterface)(nil).WorkerModel), groupName, name)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelGet", reflect.TypeOf((*MockWorkerInterface)(nil).WorkerModelGet), groupName, name)
 }
 
 // WorkerModelDelete mocks base method
@@ -8493,34 +8539,49 @@ func (mr *MockWorkerInterfaceMockRecorder) WorkerModelSpawnError(groupName, name
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelSpawnError", reflect.TypeOf((*MockWorkerInterface)(nil).WorkerModelSpawnError), groupName, name, info)
 }
 
-// WorkerModels mocks base method
-func (m *MockWorkerInterface) WorkerModels(arg0 *cdsclient.WorkerModelFilter) ([]sdk.Model, error) {
+// WorkerModelList mocks base method
+func (m *MockWorkerInterface) WorkerModelList(arg0 *cdsclient.WorkerModelFilter) ([]sdk.Model, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkerModels", arg0)
+	ret := m.ctrl.Call(m, "WorkerModelList", arg0)
 	ret0, _ := ret[0].([]sdk.Model)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// WorkerModels indicates an expected call of WorkerModels
-func (mr *MockWorkerInterfaceMockRecorder) WorkerModels(arg0 interface{}) *gomock.Call {
+// WorkerModelList indicates an expected call of WorkerModelList
+func (mr *MockWorkerInterfaceMockRecorder) WorkerModelList(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModels", reflect.TypeOf((*MockWorkerInterface)(nil).WorkerModels), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelList", reflect.TypeOf((*MockWorkerInterface)(nil).WorkerModelList), arg0)
 }
 
-// WorkerModelsEnabled mocks base method
-func (m *MockWorkerInterface) WorkerModelsEnabled() ([]sdk.Model, error) {
+// WorkerModelEnabledList mocks base method
+func (m *MockWorkerInterface) WorkerModelEnabledList() ([]sdk.Model, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WorkerModelsEnabled")
+	ret := m.ctrl.Call(m, "WorkerModelEnabledList")
 	ret0, _ := ret[0].([]sdk.Model)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// WorkerModelsEnabled indicates an expected call of WorkerModelsEnabled
-func (mr *MockWorkerInterfaceMockRecorder) WorkerModelsEnabled() *gomock.Call {
+// WorkerModelEnabledList indicates an expected call of WorkerModelEnabledList
+func (mr *MockWorkerInterfaceMockRecorder) WorkerModelEnabledList() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelsEnabled", reflect.TypeOf((*MockWorkerInterface)(nil).WorkerModelsEnabled))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelEnabledList", reflect.TypeOf((*MockWorkerInterface)(nil).WorkerModelEnabledList))
+}
+
+// WorkerModelSecretList mocks base method
+func (m *MockWorkerInterface) WorkerModelSecretList(groupName, name string) (sdk.WorkerModelSecrets, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WorkerModelSecretList", groupName, name)
+	ret0, _ := ret[0].(sdk.WorkerModelSecrets)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WorkerModelSecretList indicates an expected call of WorkerModelSecretList
+func (mr *MockWorkerInterfaceMockRecorder) WorkerModelSecretList(groupName, name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WorkerModelSecretList", reflect.TypeOf((*MockWorkerInterface)(nil).WorkerModelSecretList), groupName, name)
 }
 
 // WorkerRegister mocks base method

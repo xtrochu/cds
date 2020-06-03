@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-gorp/gorp"
 	"github.com/gorilla/mux"
+
 	"github.com/ovh/cds/engine/api/application"
 	"github.com/ovh/cds/engine/api/environment"
 	"github.com/ovh/cds/engine/api/event"
@@ -31,43 +32,33 @@ import (
 func (api *API) getWorkflowsHandler() service.Handler {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 		vars := mux.Vars(r)
-		key := vars[permProjectKey]
+		filterByProject := vars[permProjectKey]
 		filterByRepo := r.FormValue("repo")
 
-		ws, err := workflow.LoadAll(api.mustDB(), key)
-		if err != nil {
-			return err
-		}
-
-		proj, err := project.Load(api.mustDB(), key)
-		if err != nil {
-			return err
+		var dao workflow.WorkflowDAO
+		if filterByProject != "" {
+			dao.Filters.ProjectKey = filterByProject
 		}
 
 		if filterByRepo != "" {
-			mapApps := make(map[int64]sdk.Application)
-			apps, err := application.LoadAll(ctx, api.mustDB(), proj.ID)
-			if err != nil {
-				return err
-			}
-
-			for _, app := range apps {
-				mapApps[app.ID] = app
-			}
-
-			ws = ws.Filter(
-				func(w sdk.Workflow) bool {
-					if w.WorkflowData.Node.Context != nil {
-						app, _ := mapApps[w.WorkflowData.Node.Context.ApplicationID]
-						return app.RepositoryFullname == filterByRepo
-					}
-					return false
-				},
-			)
+			dao.Filters.ApplicationRepository = filterByRepo
 		}
 
-		names := ws.Names()
-		perms, err := permission.LoadWorkflowMaxLevelPermission(ctx, api.mustDB(), key, names, getAPIConsumer(ctx).GetGroupIDs())
+		dao.Loaders.WithFavoritesForUserID = getAPIConsumer(ctx).AuthentifiedUserID
+
+		groupIDS := getAPIConsumer(ctx).GetGroupIDs()
+		dao.Filters.GroupIDs = groupIDS
+		if isMaintainer(ctx) {
+			dao.Filters.GroupIDs = nil
+		}
+
+		ws, err := dao.LoadAll(ctx, api.mustDBWithCtx(ctx))
+		if err != nil {
+			return err
+		}
+
+		ids := ws.IDs()
+		perms, err := permission.LoadWorkflowMaxLevelPermissionByWorkflowIDs(ctx, api.mustDB(), ids, groupIDS)
 		if err != nil {
 			return err
 		}
@@ -76,14 +67,29 @@ func (api *API) getWorkflowsHandler() service.Handler {
 			if isAdmin(ctx) {
 				ws[i].Permissions = sdk.Permissions{Readable: true, Writable: true, Executable: true}
 			} else {
-				ws[i].Permissions = perms.Permissions(ws[i].Name)
+				idString := strconv.FormatInt(ws[i].ID, 10)
+				ws[i].Permissions = perms.Permissions(idString)
 				if isMaintainer(ctx) {
 					ws[i].Permissions.Readable = true
 				}
 			}
+
+			w1 := &ws[i]
+			api.setWorkflowURLs(w1)
 		}
 
 		return service.WriteJSON(w, ws, http.StatusOK)
+	}
+}
+
+func (api *API) setWorkflowURLs(w1 *sdk.Workflow) {
+	w1.URLs.APIURL = api.Config.URL.API + api.Router.GetRoute("GET", api.getWorkflowHandler, map[string]string{"key": w1.ProjectKey, "permWorkflowName": w1.Name})
+	w1.URLs.UIURL = api.Config.URL.UI + "/project/" + w1.ProjectKey + "/workflow/" + w1.Name
+
+	for j := range w1.Runs {
+		r1 := &w1.Runs[j]
+		r1.URLs.APIURL = api.Config.URL.API + api.Router.GetRoute("GET", api.getWorkflowRunHandler, map[string]string{"key": w1.ProjectKey, "permWorkflowName": w1.Name, "number": strconv.FormatInt(r1.Number, 10)})
+		r1.URLs.UIURL = api.Config.URL.UI + "/project/" + w1.ProjectKey + "/workflow/" + w1.Name + "/run/" + strconv.FormatInt(r1.Number, 10)
 	}
 }
 
@@ -108,22 +114,18 @@ func (api *API) getWorkflowHandler() service.Handler {
 		}
 
 		opts := workflow.LoadOptions{
-			Minimal:               minimal, // if true, load only data from table workflow, not pipelines, app, env...
-			DeepPipeline:          withDeepPipelines,
-			WithIcon:              !withoutIcons,
-			WithLabels:            withLabels,
-			WithAsCodeUpdateEvent: withAsCodeEvents,
-			WithIntegrations:      true,
-			WithTemplate:          withTemplate,
+			Minimal:                minimal, // if true, load only data from table workflow, not pipelines, app, env...
+			DeepPipeline:           withDeepPipelines,
+			WithIcon:               !withoutIcons,
+			WithLabels:             withLabels,
+			WithAsCodeUpdateEvent:  withAsCodeEvents,
+			WithIntegrations:       true,
+			WithTemplate:           withTemplate,
+			WithFavoritesForUserID: getAPIConsumer(ctx).AuthentifiedUserID,
 		}
 		w1, err := workflow.Load(ctx, api.mustDB(), api.Cache, *proj, name, opts)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load workflow %s", name)
-		}
-
-		w1.Favorite, err = workflow.IsFavorite(api.mustDB(), w1, getAPIConsumer(ctx).AuthentifiedUserID)
-		if err != nil {
-			return err
 		}
 
 		if withUsage {
@@ -155,8 +157,7 @@ func (api *API) getWorkflowHandler() service.Handler {
 			}
 		}
 
-		w1.URLs.APIURL = api.Config.URL.API + api.Router.GetRoute("GET", api.getWorkflowHandler, map[string]string{"key": key, "permWorkflowName": w1.Name})
-		w1.URLs.UIURL = api.Config.URL.UI + "/project/" + key + "/workflow/" + w1.Name
+		api.setWorkflowURLs(w1)
 
 		//We filter project and workflow configuration key, because they are always set on insertHooks
 		w1.FilterHooksConfig(sdk.HookConfigProject, sdk.HookConfigWorkflow)
@@ -290,7 +291,7 @@ func (api *API) postWorkflowLabelHandler() service.Handler {
 				return sdk.NewErrorFrom(sdk.ErrWrongRequest, "label ID or label name should not be empty")
 			}
 
-			lbl, err := project.LabelByName(db, proj.ID, label.Name)
+			lbl, err := project.LabelByName(tx, proj.ID, label.Name)
 			if err != nil {
 				if sdk.Cause(err) != sql.ErrNoRows {
 					return sdk.WrapError(err, "cannot load label by name")
@@ -304,7 +305,7 @@ func (api *API) postWorkflowLabelHandler() service.Handler {
 			}
 		}
 
-		wf, err := workflow.Load(ctx, db, api.Cache, *proj, workflowName, workflow.LoadOptions{WithLabels: true})
+		wf, err := workflow.Load(ctx, tx, api.Cache, *proj, workflowName, workflow.LoadOptions{WithLabels: true})
 		if err != nil {
 			return sdk.WrapError(err, "cannot load workflow %s/%s", key, workflowName)
 		}
@@ -610,26 +611,37 @@ func (api *API) deleteWorkflowHandler() service.Handler {
 		consumer := getAPIConsumer(ctx)
 		sdk.GoRoutine(api.Router.Background, "deleteWorkflowHandler",
 			func(ctx context.Context) {
-				txg, errT := api.mustDB().Begin()
-				if errT != nil {
-					log.Error(ctx, "deleteWorkflowHandler> Cannot start transaction: %v", errT)
+				txg, err := api.mustDB().Begin()
+				if err != nil {
+					log.Error(ctx, "deleteWorkflowHandler> Cannot start transaction: %v", err)
+					return
 				}
 				defer txg.Rollback() // nolint
 
-				oldW, err := workflow.Load(ctx, txg, api.Cache, *p, name, workflow.LoadOptions{})
+				var dao workflow.WorkflowDAO
+				dao.Filters.ProjectKey = p.Key
+				dao.Filters.WorkflowName = name
+				dao.Filters.DisableFilterDeletedWorkflow = true
+
+				oldW, err := dao.Load(ctx, txg)
 				if err != nil {
-					log.Error(ctx, "deleteWorkflowHandler> unable to load workflow: %v", err)
+					log.Error(ctx, "deleteWorkflowHandler> unable to load workflow for deletion: %v", err)
 					return
 				}
 
-				if err := workflow.Delete(ctx, txg, api.Cache, *p, oldW); err != nil {
+				if err := workflow.CompleteWorkflow(ctx, txg, &oldW, *p, workflow.LoadOptions{}); err != nil {
+					log.Error(ctx, "deleteWorkflowHandler> unable to load workflow: not found")
+					return
+				}
+
+				if err := workflow.Delete(ctx, txg, api.Cache, *p, &oldW); err != nil {
 					log.Error(ctx, "deleteWorkflowHandler> unable to delete workflow: %v", err)
 					return
 				}
 				if err := txg.Commit(); err != nil {
 					log.Error(ctx, "deleteWorkflowHandler> Cannot commit transaction: %v", err)
 				}
-				event.PublishWorkflowDelete(ctx, key, *oldW, consumer)
+				event.PublishWorkflowDelete(ctx, key, oldW, consumer)
 			}, api.PanicDump())
 
 		return service.WriteJSON(w, nil, http.StatusOK)
@@ -762,5 +774,51 @@ func (api *API) getWorkflowNotificationsConditionsHandler() service.Handler {
 
 		sort.Strings(data.ConditionNames)
 		return service.WriteJSON(w, data, http.StatusOK)
+	}
+}
+
+func (api *API) getSearchWorkflowHandler() service.Handler {
+	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
+		var dao workflow.WorkflowDAO
+		dao.Filters.ProjectKey = FormString(r, "project")
+		dao.Filters.WorkflowName = FormString(r, "name")
+		dao.Filters.VCSServer = FormString(r, "vcs")
+		dao.Filters.ApplicationRepository = FormString(r, "repository")
+		dao.Loaders.WithRuns = FormInt(r, "runs")
+		dao.Loaders.WithFavoritesForUserID = getAPIConsumer(ctx).AuthentifiedUserID
+
+		groupIDS := getAPIConsumer(ctx).GetGroupIDs()
+		dao.Filters.GroupIDs = groupIDS
+		if isMaintainer(ctx) {
+			dao.Filters.GroupIDs = nil
+		}
+
+		ws, err := dao.LoadAll(ctx, api.mustDBWithCtx(ctx))
+		if err != nil {
+			return err
+		}
+
+		ids := ws.IDs()
+		perms, err := permission.LoadWorkflowMaxLevelPermissionByWorkflowIDs(ctx, api.mustDB(), ids, groupIDS)
+		if err != nil {
+			return err
+		}
+
+		for i := range ws {
+			if isAdmin(ctx) {
+				ws[i].Permissions = sdk.Permissions{Readable: true, Writable: true, Executable: true}
+			} else {
+				idString := strconv.FormatInt(ws[i].ID, 10)
+				ws[i].Permissions = perms.Permissions(idString)
+				if isMaintainer(ctx) {
+					ws[i].Permissions.Readable = true
+				}
+			}
+
+			w1 := &ws[i]
+			api.setWorkflowURLs(w1)
+		}
+
+		return service.WriteJSON(w, ws, http.StatusOK)
 	}
 }

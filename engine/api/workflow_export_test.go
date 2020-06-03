@@ -22,8 +22,8 @@ import (
 )
 
 func Test_getWorkflowExportHandler(t *testing.T) {
-	api, db, _, end := newTestAPI(t)
-	defer end()
+	api, db, _ := newTestAPI(t)
+
 	u, pass := assets.InsertAdminUser(t, api.mustDB())
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, api.mustDB(), api.Cache, key, key)
@@ -150,8 +150,8 @@ workflow:
 }
 
 func Test_getWorkflowExportHandlerWithPermissions(t *testing.T) {
-	api, db, _, end := newTestAPI(t)
-	defer end()
+	api, db, _ := newTestAPI(t)
+
 	u, pass := assets.InsertAdminUser(t, api.mustDB())
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, api.mustDB(), api.Cache, key, key)
@@ -166,8 +166,12 @@ func Test_getWorkflowExportHandlerWithPermissions(t *testing.T) {
 		Name: "Test_getWorkflowExportHandlerWithPermissions-Group2",
 	}
 
-	require.NoError(t, group.Insert(context.TODO(), api.mustDB(), group2))
-	group2, _ = group.LoadByName(context.TODO(), api.mustDB(), "Test_getWorkflowExportHandlerWithPermissions-Group2")
+	g, _ := group.LoadByName(context.TODO(), api.mustDB(), group2.Name)
+	if g != nil {
+		group2 = g
+	} else {
+		require.NoError(t, group.Insert(context.TODO(), api.mustDB(), group2))
+	}
 
 	//First pipeline
 	pip := sdk.Pipeline{
@@ -280,8 +284,8 @@ history_length: 25
 }
 
 func Test_getWorkflowPullHandler(t *testing.T) {
-	api, db, _, end := newTestAPI(t)
-	defer end()
+	api, db, _ := newTestAPI(t)
+
 	u, pass := assets.InsertAdminUser(t, api.mustDB())
 	key := sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, api.mustDB(), api.Cache, key, key)

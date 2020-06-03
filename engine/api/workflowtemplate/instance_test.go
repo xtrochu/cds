@@ -21,8 +21,7 @@ import (
 )
 
 func TestCheckAndExecuteTemplate(t *testing.T) {
-	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
-	defer end()
+	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
 
 	proj := assets.InsertTestProject(t, db, cache, sdk.RandomString(10), sdk.RandomString(10))
 	grp := proj.ProjectGroups[0].Group
@@ -68,7 +67,7 @@ version: v2.0`)),
 		Data             exportentities.WorkflowComponents
 		Detached         bool
 		ErrorExists      bool
-		InstanceExists   bool
+		InstanceStored   bool
 		ExpectedInstance sdk.WorkflowTemplateInstance
 		WorkflowExists   bool
 		ExpectedWorkflow exportentities.Workflow
@@ -91,7 +90,7 @@ version: v2.0`)),
 				Parameters: map[string]string{"param1": "value1"},
 			},
 		},
-		InstanceExists: true,
+		InstanceStored: true,
 		ExpectedInstance: sdk.WorkflowTemplateInstance{
 			Request: sdk.WorkflowTemplateRequest{
 				WorkflowName: "my-workflow",
@@ -110,7 +109,7 @@ version: v2.0`)),
 				Parameters: map[string]string{"param1": "value1"},
 			},
 		},
-		InstanceExists: true,
+		InstanceStored: true,
 		ExpectedInstance: sdk.WorkflowTemplateInstance{
 			Request: sdk.WorkflowTemplateRequest{
 				WorkflowName: "my-workflow",
@@ -149,16 +148,16 @@ version: v2.0`)),
 			if c.Detached {
 				mods = append(mods, workflowtemplate.TemplateRequestModifiers.Detached)
 			}
-			wti, err := workflowtemplate.CheckAndExecuteTemplate(context.TODO(), db, *consumer, *proj, &c.Data, mods...)
+			_, wti, err := workflowtemplate.CheckAndExecuteTemplate(context.TODO(), db, *consumer, *proj, &c.Data, mods...)
 			if c.ErrorExists {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
 
-			instanceExists := wti != nil
-			require.Equal(t, c.InstanceExists, instanceExists, "Instance exists should be %t buf is %t", c.InstanceExists, instanceExists)
-			if instanceExists {
+			instanceStored := wti != nil && !wti.Request.Detached
+			require.Equal(t, c.InstanceStored, instanceStored, "Instance stored should be %t buf is %t", c.InstanceStored, instanceStored)
+			if instanceStored {
 				assert.Equal(t, c.ExpectedInstance.Request, wti.Request)
 			}
 
@@ -172,8 +171,7 @@ version: v2.0`)),
 }
 
 func TestUpdateTemplateInstanceWithWorkflow(t *testing.T) {
-	db, cache, end := test.SetupPG(t, bootstrap.InitiliazeDB)
-	defer end()
+	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
 
 	proj := assets.InsertTestProject(t, db, cache, sdk.RandomString(10), sdk.RandomString(10))
 	grp := proj.ProjectGroups[0].Group
@@ -214,7 +212,7 @@ name: Pipeline-[[.id]]`)),
 			Parameters: map[string]string{"param1": "value1"},
 		},
 	}
-	wti, err := workflowtemplate.CheckAndExecuteTemplate(context.TODO(), db, *consumer, *proj, &data)
+	_, wti, err := workflowtemplate.CheckAndExecuteTemplate(context.TODO(), db, *consumer, *proj, &data)
 	require.NoError(t, err)
 
 	_, wkf, _, err := workflow.Push(context.TODO(), db, cache, proj, data, nil, consumer, project.DecryptWithBuiltinKey)
