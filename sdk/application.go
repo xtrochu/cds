@@ -19,7 +19,6 @@ type Application struct {
 	Description          string                       `json:"description"  db:"description"`
 	Icon                 string                       `json:"icon"  db:"icon"`
 	ProjectID            int64                        `json:"-" db:"project_id"`
-	ProjectKey           string                       `json:"project_key" db:"-" cli:"project_key"`
 	Variables            []Variable                   `json:"variables,omitempty" db:"-"`
 	Notifications        []UserNotification           `json:"notifications,omitempty" db:"-"`
 	LastModified         time.Time                    `json:"last_modified" db:"last_modified" mapstructure:"-"`

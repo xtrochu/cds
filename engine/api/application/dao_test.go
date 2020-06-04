@@ -195,9 +195,8 @@ func TestWithRepositoryStrategy(t *testing.T) {
 
 	proj := assets.InsertTestProject(t, db, cache, key, key)
 	app := &sdk.Application{
-		Name:       "my-app",
-		ProjectKey: proj.Key,
-		ProjectID:  proj.ID,
+		Name:      "my-app",
+		ProjectID: proj.ID,
 	}
 	require.NoError(t, application.Insert(db, proj.ID, app))
 

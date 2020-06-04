@@ -27,31 +27,38 @@ func (e dbApplication) Canonical() gorpmapping.CanonicalForms {
 }
 
 func getAll(ctx context.Context, db gorp.SqlExecutor, query gorpmapping.Query, opts ...LoadOptionFunc) ([]sdk.Application, error) {
-	var res []dbApplication
-	if err := gorpmapping.GetAll(ctx, db, query, &res, gorpmapping.GetOptions.WithDecryption); err != nil {
+	var as []dbApplication
+	if err := gorpmapping.GetAll(ctx, db, query, &as, gorpmapping.GetOptions.WithDecryption); err != nil {
 		return nil, err
 	}
 
-	apps := make([]sdk.Application, len(res))
-	for i := range res {
-		isValid, err := gorpmapping.CheckSignature(res[i], res[i].Signature)
+	verifiedApplications := make([]*sdk.Application, 0, len(as))
+	for i := range as {
+		isValid, err := gorpmapping.CheckSignature(as[i], as[i].Signature)
 		if err != nil {
 			return nil, err
 		}
 		if !isValid {
-			log.Error(ctx, "application.loadApplications> application %d data corrupted", res[i].ID)
+			log.Error(ctx, "application.loadApplications> application %d data corrupted", as[i].ID)
 			continue
 		}
+		verifiedApplications = append(verifiedApplications, &as[i].Application)
+	}
 
-		a := &res[i]
-		app, err := unwrap(ctx, db, a, opts...)
-		if err != nil {
-			return nil, sdk.WrapError(err, "application.loadapplications")
+	if len(verifiedApplications) > 0 {
+		for i := range opts {
+			if err := opts[i](ctx, db, verifiedApplications...); err != nil {
+				return nil, err
+			}
 		}
+	}
 
-		//By default all vcds_strategy password are masked
-		app.RepositoryStrategy.Password = sdk.PasswordPlaceholder
-		apps[i] = *app
+	apps := make([]sdk.Application, len(verifiedApplications))
+	for i := range verifiedApplications {
+		apps[i] = *verifiedApplications[i]
+
+		// By default all vcds_strategy password are masked
+		apps[i].RepositoryStrategy.Password = sdk.PasswordPlaceholder
 	}
 
 	return apps, nil
@@ -69,6 +76,7 @@ func get(ctx context.Context, db gorp.SqlExecutor, query gorpmapping.Query, opts
 
 func getWithClearVCSStrategyPassword(ctx context.Context, db gorp.SqlExecutor, query gorpmapping.Query, opts ...LoadOptionFunc) (*sdk.Application, error) {
 	dbApp := dbApplication{}
+
 	// Allways load with decryption to get all the data for vcs_strategy
 	found, err := gorpmapping.Get(ctx, db, query, &dbApp, gorpmapping.GetOptions.WithDecryption)
 	if err != nil {
@@ -77,6 +85,7 @@ func getWithClearVCSStrategyPassword(ctx context.Context, db gorp.SqlExecutor, q
 	if !found {
 		return nil, sdk.WithStack(sdk.ErrNotFound)
 	}
+
 	isValid, err := gorpmapping.CheckSignature(dbApp, dbApp.Signature)
 	if err != nil {
 		return nil, err
@@ -85,25 +94,16 @@ func getWithClearVCSStrategyPassword(ctx context.Context, db gorp.SqlExecutor, q
 		log.Error(context.Background(), "application.get> application %d data corrupted", dbApp.ID)
 		return nil, sdk.WithStack(sdk.ErrNotFound)
 	}
-	return unwrap(ctx, db, &dbApp, opts...)
-}
 
-func unwrap(ctx context.Context, db gorp.SqlExecutor, dbApp *dbApplication, opts ...LoadOptionFunc) (*sdk.Application, error) {
-	app := &dbApp.Application
-	if app.ProjectKey == "" {
-		pkey, errP := db.SelectStr("SELECT projectkey FROM project WHERE id = $1", app.ProjectID)
-		if errP != nil {
-			return nil, sdk.WrapError(errP, "application.unwrap")
-		}
-		app.ProjectKey = pkey
-	}
+	app := dbApp.Application
 
-	for _, f := range opts {
-		if err := f(ctx, db, app); err != nil && sdk.Cause(err) != sql.ErrNoRows {
-			return nil, sdk.WrapError(err, "application.unwrap")
+	for i := range opts {
+		if err := opts[i](ctx, db, &app); err != nil {
+			return nil, err
 		}
 	}
-	return app, nil
+
+	return &app, nil
 }
 
 // Exists checks if an application given its name exists
