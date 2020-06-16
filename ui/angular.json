@@ -34,6 +34,7 @@
               "node_modules/font-awesome/css/font-awesome.css",
               "node_modules/animate.css/animate.min.css",
               "node_modules/prismjs/themes/prism-okaidia.css",
+              "node_modules/lato-font/css/lato-font.css",
               "src/styles.scss"
             ],
             "scripts": [
