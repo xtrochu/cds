@@ -43,7 +43,6 @@ import (
 	"github.com/ovh/cds/engine/api/objectstore"
 	"github.com/ovh/cds/engine/api/purge"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
-	"github.com/ovh/cds/engine/api/secret"
 	"github.com/ovh/cds/engine/api/services"
 	"github.com/ovh/cds/engine/api/version"
 	"github.com/ovh/cds/engine/api/worker"
@@ -82,6 +81,10 @@ type Configuration struct {
 	Directories struct {
 		Download string `toml:"download" default:"/var/lib/cds-engine" json:"download"`
 	} `toml:"directories" json:"directories"`
+	InternalServiceMesh struct {
+		RequestSecondsTimeout int  `toml:"requestSecondsTimeout" json:"requestSecondsTimeout" default:"60"`
+		InsecureSkipVerifyTLS bool `toml:"insecureSkipVerifyTLS" json:"insecureSkipVerifyTLS" default:"false"`
+	} `toml:"internalServiceMesh" json:"internalServiceMesh"`
 	Auth struct {
 		DefaultGroup  string `toml:"defaultGroup" default:"" comment:"The default group is the group in which every new user will be granted at signup" json:"defaultGroup"`
 		RSAPrivateKey string `toml:"rsaPrivateKey" default:"" comment:"The RSA Private Key used to sign and verify the JWT Tokens issued by the API \nThis is mandatory." json:"-"`
@@ -181,11 +184,10 @@ type Configuration struct {
 			Token        string `toml:"token" comment:"Token shared between Izanami and CDS to be able to send webhooks from izanami" json:"-"`
 		} `toml:"izanami" comment:"Feature flipping provider: https://maif.github.io/izanami" json:"izanami"`
 	} `toml:"features" comment:"###########################\n CDS Features flipping Settings \n##########################" json:"features"`
-	Services      []sdk.ServiceConfiguration `toml:"services" comment:"###########################\n CDS Services Settings \n##########################" json:"services"`
-	DefaultOS     string                     `toml:"defaultOS" default:"linux" comment:"if no model and os/arch is specified in your job's requirements then spawn worker on this operating system (example: freebsd, linux, windows)" json:"defaultOS"`
-	DefaultArch   string                     `toml:"defaultArch" default:"amd64" comment:"if no model and no os/arch is specified in your job's requirements then spawn worker on this architecture (example: amd64, arm, 386)" json:"defaultArch"`
-	DefaultRegion string                     `toml:"defaultRegion" default:"" comment:"Optional. If no region in your job's requirements then spawn worker with this region. You need to have an hatchery managing this region." json:"defaultRegion"`
-	Graylog       struct {
+	Services    []sdk.ServiceConfiguration `toml:"services" comment:"###########################\n CDS Services Settings \n##########################" json:"services"`
+	DefaultOS   string                     `toml:"defaultOS" default:"linux" comment:"if no model and os/arch is specified in your job's requirements then spawn worker on this operating system (example: freebsd, linux, windows)" json:"defaultOS"`
+	DefaultArch string                     `toml:"defaultArch" default:"amd64" comment:"if no model and no os/arch is specified in your job's requirements then spawn worker on this architecture (example: amd64, arm, 386)" json:"defaultArch"`
+	Graylog     struct {
 		AccessToken string `toml:"accessToken" json:"-"`
 		Stream      string `toml:"stream" json:"-"`
 		URL         string `toml:"url" comment:"Example: http://localhost:9000" json:"url"`
@@ -239,7 +241,6 @@ type API struct {
 	SharedStorage       objectstore.Driver
 	StartupTime         time.Time
 	Maintenance         bool
-	eventsBroker        *eventsBroker
 	websocketBroker     *websocketBroker
 	Cache               cache.Store
 	Metrics             struct {
@@ -402,13 +403,19 @@ func (a *API) Serve(ctx context.Context) error {
 		return errors.New("worker binary unavailable")
 	}
 
-	// Initialize secret driver
-	secret.Init(a.Config.Secrets.Key)
-
 	// Initialize the jwt layer
 	if err := authentication.Init(a.ServiceName, []byte(a.Config.Auth.RSAPrivateKey)); err != nil {
 		return sdk.WrapError(err, "unable to initialize the JWT Layer")
 	}
+
+	// Intialize service mesh httpclient
+	if a.Config.InternalServiceMesh.RequestSecondsTimeout == 0 {
+		a.Config.InternalServiceMesh.RequestSecondsTimeout = 60
+	}
+	services.HTTPClient = cdsclient.NewHTTPClient(
+		time.Duration(a.Config.InternalServiceMesh.RequestSecondsTimeout)*time.Second,
+		a.Config.InternalServiceMesh.InsecureSkipVerifyTLS,
+	)
 
 	// Initialize mail package
 	log.Info(ctx, "Initializing mail driver...")
@@ -477,7 +484,6 @@ func (a *API) Serve(ctx context.Context) error {
 		},
 	}
 
-	// DEPRECATED
 	// API Storage will be a public integration
 	var err error
 	a.SharedStorage, err = objectstore.Init(ctx, cfg)
@@ -656,75 +662,8 @@ func (a *API) Serve(ctx context.Context) error {
 		a.serviceAPIHeartbeat(ctx)
 	}, a.PanicDump())
 	sdk.GoRoutine(ctx, "authentication.SessionCleaner", func(ctx context.Context) {
-		authentication.SessionCleaner(ctx, a.mustDB)
+		authentication.SessionCleaner(ctx, a.mustDB, 10*time.Second)
 	}, a.PanicDump())
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorGroupMembership", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorGroupMembership(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorApplicationKeys", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorApplicationKeys(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorProjectKeys", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorProjectKeys(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorApplicationVariables", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorApplicationVariables(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorEnvironmentKeys", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorEnvironmentKeys(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorProjectVariables", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorProjectVariables(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorEnvironmentVariables", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorEnvironmentVariables(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "CleanDuplicateNodes", Release: "0.44.0", Blocker: false, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.CleanDuplicateNodes(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "ListDuplicateHooks", Release: "0.44.0", Blocker: false, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.CleanDuplicateHooks(ctx, a.DBConnectionFactory.GetDBMap(), a.Cache, true)
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "CleanDuplicateHooks", Release: "0.44.0", Blocker: false, Automatic: false, ExecFunc: func(ctx context.Context) error {
-		return migrate.CleanDuplicateHooks(ctx, a.DBConnectionFactory.GetDBMap(), a.Cache, false)
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "FixEmptyUUIDHooks", Release: "0.44.0", Blocker: false, Automatic: false, ExecFunc: func(ctx context.Context) error {
-		return migrate.FixEmptyUUIDHooks(ctx, a.DBConnectionFactory.GetDBMap(), a.Cache)
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorApplicationCrypto", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorApplicationCrypto(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorIntegrationCrypto", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		if err := migrate.RefactorIntegrationModelCrypto(ctx, a.DBConnectionFactory.GetDBMap()); err != nil {
-			return err
-		}
-		return migrate.RefactorProjectIntegrationCrypto(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "AsCodeEventsWorkflowHolder", Release: "0.44.0", Blocker: false, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorAsCodeEventsWorkflowHolder(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorProjectVCSServerCrypto", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorProjectVCSServers(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
-
-	migrate.Add(ctx, sdk.Migration{Name: "RefactorWorkerModelCrypto", Release: "0.44.0", Blocker: true, Automatic: true, ExecFunc: func(ctx context.Context) error {
-		return migrate.RefactorWorkerModelCrypto(ctx, a.DBConnectionFactory.GetDBMap())
-	}})
 
 	isFreshInstall, errF := version.IsFreshInstall(a.mustDB())
 	if errF != nil {
@@ -813,7 +752,7 @@ func (a *API) Serve(ctx context.Context) error {
 		}, a.PanicDump())
 	sdk.GoRoutine(ctx, "workflow.Initialize",
 		func(ctx context.Context) {
-			workflow.Initialize(ctx, a.DBConnectionFactory.GetDBMap, a.Cache, a.Config.URL.UI, a.Config.DefaultOS, a.Config.DefaultArch, a.Config.DefaultRegion)
+			workflow.Initialize(ctx, a.DBConnectionFactory.GetDBMap, a.Cache, a.Config.URL.UI, a.Config.DefaultOS, a.Config.DefaultArch)
 		}, a.PanicDump())
 	sdk.GoRoutine(ctx, "PushInElasticSearch",
 		func(ctx context.Context) {

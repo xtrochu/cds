@@ -69,13 +69,13 @@ func Exists(db gorp.SqlExecutor, key string, name string) (bool, error) {
 	return count > 0, nil
 }
 
-func LoadByRepo(ctx context.Context, store cache.Store, db gorp.SqlExecutor, proj sdk.Project, repo string, opts LoadOptions) (*sdk.Workflow, error) {
+func LoadByRepo(ctx context.Context, db gorp.SqlExecutor, proj sdk.Project, repo string, opts LoadOptions) (*sdk.Workflow, error) {
 	ctx, end := observability.Span(ctx, "workflow.Load")
 	defer end()
 
 	dao := opts.GetWorkflowDAO()
 	dao.Filters.FromRepository = repo
-	dao.Limit = 1
+	dao.Filters.ProjectKey = proj.Key
 
 	ws, err := dao.Load(ctx, db)
 	if err != nil {
@@ -243,23 +243,6 @@ func Load(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.
 }
 
 // LoadAndLockByID loads a workflow
-func LoadAndLockByID(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, id int64, opts LoadOptions) (*sdk.Workflow, error) {
-	dao := opts.GetWorkflowDAO()
-	dao.Filters.WorkflowIDs = []int64{id}
-	dao.Lock = true
-
-	ws, err := dao.Load(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	if !opts.Minimal {
-		if err := CompleteWorkflow(ctx, db, &ws, proj, opts); err != nil {
-			return nil, err
-		}
-	}
-	return &ws, nil
-}
 
 // LoadByID loads a workflow
 func LoadByID(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, id int64, opts LoadOptions) (*sdk.Workflow, error) {
@@ -412,6 +395,9 @@ func Insert(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 }
 
 func RenameNode(ctx context.Context, db gorp.SqlExecutor, w *sdk.Workflow) error {
+	ctx, end := observability.Span(ctx, "workflow.RenameNode")
+	defer end()
+
 	nodes := w.WorkflowData.Array()
 	var maxJoinNumber int
 	maxNumberByPipeline := map[int64]int{}
@@ -586,6 +572,9 @@ func RenameNode(ctx context.Context, db gorp.SqlExecutor, w *sdk.Workflow) error
 
 // Update updates a workflow
 func Update(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, wf *sdk.Workflow, uptOption UpdateOptions) error {
+	ctx, end := observability.Span(ctx, "workflow.Update")
+	defer end()
+
 	if err := CompleteWorkflow(ctx, db, wf, proj, LoadOptions{}); err != nil {
 		return err
 	}
@@ -706,6 +695,8 @@ func Delete(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sd
 }
 
 func CompleteWorkflow(ctx context.Context, db gorp.SqlExecutor, w *sdk.Workflow, proj sdk.Project, opts LoadOptions) error {
+	ctx, end := observability.Span(ctx, "workflow.CompleteWorkflow")
+	defer end()
 
 	w.InitMaps()
 	w.AssignEmptyType()
@@ -755,7 +746,7 @@ func CompleteWorkflow(ctx context.Context, db gorp.SqlExecutor, w *sdk.Workflow,
 func CheckValidity(ctx context.Context, db gorp.SqlExecutor, w *sdk.Workflow) error {
 	//Check project is not empty
 	if w.ProjectKey == "" {
-		return sdk.NewError(sdk.ErrWorkflowInvalid, fmt.Errorf("Invalid project key"))
+		return sdk.NewErrorFrom(sdk.ErrWorkflowInvalid, "invalid project key")
 	}
 
 	if w.Icon != "" {
@@ -770,24 +761,24 @@ func CheckValidity(ctx context.Context, db gorp.SqlExecutor, w *sdk.Workflow) er
 	//Check workflow name
 	rx := sdk.NamePatternRegex
 	if !rx.MatchString(w.Name) {
-		return sdk.NewError(sdk.ErrWorkflowInvalid, fmt.Errorf("Invalid workflow name. It should match %s", sdk.NamePattern))
+		return sdk.NewErrorFrom(sdk.ErrWorkflowInvalid, "workflow name should match pattern %s", sdk.NamePattern)
 	}
 
 	//Check refs
 	for _, j := range w.WorkflowData.Joins {
 		if len(j.JoinContext) == 0 {
-			return sdk.NewError(sdk.ErrWorkflowInvalid, fmt.Errorf("Source node references is mandatory"))
+			return sdk.NewErrorFrom(sdk.ErrWorkflowInvalid, "source node references is mandatory")
 		}
 	}
 
 	if w.WorkflowData.Node.Context != nil && w.WorkflowData.Node.Context.DefaultPayload != nil {
 		defaultPayload, err := w.WorkflowData.Node.Context.DefaultPayloadToMap()
 		if err != nil {
-			return sdk.WrapError(err, "cannot transform default payload to map")
+			return sdk.NewErrorFrom(err, "cannot transform default payload to map")
 		}
 		for payloadKey := range defaultPayload {
 			if strings.HasPrefix(payloadKey, "cds.") {
-				return sdk.WrapError(sdk.ErrInvalidPayloadVariable, "cannot have key %s in default payload", payloadKey)
+				return sdk.NewErrorFrom(sdk.ErrInvalidPayloadVariable, "cannot have key %s in default payload", payloadKey)
 			}
 		}
 	}
@@ -1009,7 +1000,7 @@ func checkApplication(ctx context.Context, db gorp.SqlExecutor, proj sdk.Project
 		)
 		if err != nil {
 			if sdk.ErrorIs(err, sdk.ErrNotFound) {
-				return sdk.WithData(sdk.ErrNotFound, n.Context.ApplicationName)
+				return sdk.NewErrorFrom(sdk.WithData(sdk.ErrNotFound, n.Context.ApplicationName), "cannot find application with name: %s", n.Context.ApplicationName)
 			}
 			return sdk.WrapError(err, "unable to load application %s", n.Context.ApplicationName)
 		}

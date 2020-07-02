@@ -30,7 +30,7 @@ func Test_getVariableAuditInApplicationHandler(t *testing.T) {
 	require.NoError(t, application.Insert(api.mustDB(), proj.ID, app))
 
 	// Add variable
-	v := sdk.Variable{
+	v := sdk.ApplicationVariable{
 		Name:  "foo",
 		Type:  "string",
 		Value: "bar",

@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/go-gorp/gorp"
@@ -76,7 +75,7 @@ func Import(ctx context.Context, db gorp.SqlExecutor, proj sdk.Project, app *sdk
 			return sdk.NewError(sdk.ErrNoReposManager, err)
 		}
 
-		if err := repositoriesmanager.InsertForApplication(db, app, proj.Key); err != nil {
+		if err := repositoriesmanager.InsertForApplication(db, app); err != nil {
 			return err
 		}
 	}
@@ -85,7 +84,7 @@ func Import(ctx context.Context, db gorp.SqlExecutor, proj sdk.Project, app *sdk
 	for _, k := range app.Keys {
 		k.ApplicationID = app.ID
 		if err := InsertKey(db, &k); err != nil {
-			return sdk.WrapError(err, "Unable to insert key %s", k.Name)
+			return sdk.WrapError(err, "unable to insert key %s", k.Name)
 		}
 		if msgChan != nil {
 			msgChan <- sdk.NewMessage(sdk.MsgAppKeyCreated, strings.ToUpper(k.Type.String()), k.Name, app.Name)
@@ -94,13 +93,13 @@ func Import(ctx context.Context, db gorp.SqlExecutor, proj sdk.Project, app *sdk
 
 	//Set deployment strategies
 	if err := DeleteAllDeploymentStrategies(db, app.ID); err != nil {
-		return sdk.WrapError(err, "Unable to delete deployment strategies")
+		return sdk.WrapError(err, "unable to delete deployment strategies")
 	}
 
 	for pfName, pfConfig := range app.DeploymentStrategies {
 		pf, has := proj.GetIntegration(pfName)
 		if !has {
-			return sdk.WrapError(sdk.NewError(sdk.ErrNotFound, fmt.Errorf("integration %s not found", pfName)), "application.Import")
+			return sdk.NewErrorFrom(sdk.ErrNotFound, "integration %s not found", pfName)
 		}
 		if err := SetDeploymentStrategy(db, proj.ID, app.ID, pf.IntegrationModelID, pfName, pfConfig); err != nil {
 			return sdk.WrapError(err, "unable to set deployment strategy %s", pfName)

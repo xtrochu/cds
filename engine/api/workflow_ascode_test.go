@@ -158,7 +158,7 @@ func TestPostUpdateWorkflowAsCodeHandler(t *testing.T) {
 	w.FromRepository = "myfromrepositoryurl"
 
 	var errP error
-	proj, errP = project.Load(api.mustDB(), proj.Key,
+	proj, errP = project.Load(context.TODO(), api.mustDB(), proj.Key,
 		project.LoadOptions.WithApplicationWithDeploymentStrategies,
 		project.LoadOptions.WithPipelines,
 		project.LoadOptions.WithEnvironments,
@@ -366,7 +366,7 @@ func TestPostMigrateWorkflowAsCodeHandler(t *testing.T) {
 	w := initWorkflow(t, db, proj, app, pip, repoModel)
 
 	var errP error
-	proj, errP = project.Load(api.mustDB(), proj.Key,
+	proj, errP = project.Load(context.TODO(), api.mustDB(), proj.Key,
 		project.LoadOptions.WithApplicationWithDeploymentStrategies,
 		project.LoadOptions.WithPipelines,
 		project.LoadOptions.WithEnvironments,
@@ -466,7 +466,7 @@ func createApplication(t *testing.T, db gorp.SqlExecutor, api *API, proj *sdk.Pr
 		VCSServer:          "github",
 	}
 	require.NoError(t, application.Insert(db, proj.ID, &app))
-	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app))
 	return &app
 }
 

@@ -224,7 +224,7 @@ func (api *API) postWorkflowRunNumHandler() service.Handler {
 			return sdk.WrapError(sdk.ErrWrongRequest, "cannot num must be > %d, got %d", num, m.Num)
 		}
 
-		proj, err := project.Load(api.mustDB(), key, project.LoadOptions.WithIntegrations)
+		proj, err := project.Load(ctx, api.mustDB(), key, project.LoadOptions.WithIntegrations)
 		if err != nil {
 			return sdk.WrapError(err, "unable to load projet")
 		}
@@ -355,7 +355,7 @@ func (api *API) stopWorkflowRunHandler() service.Handler {
 			return sdk.WrapError(err, "unable to load last workflow run")
 		}
 
-		proj, err := project.Load(api.mustDB(), key)
+		proj, err := project.Load(ctx, api.mustDB(), key)
 		if err != nil {
 			return sdk.WrapError(err, "unable to load project")
 		}
@@ -410,9 +410,10 @@ func stopWorkflowRun(ctx context.Context, dbFunc func() *gorp.DbMap, store cache
 	spwnMsg := sdk.SpawnMsg{ID: sdk.MsgWorkflowNodeStop.ID, Args: []interface{}{ident.GetUsername()}, Type: sdk.MsgWorkflowNodeStop.Type}
 
 	stopInfos := sdk.SpawnInfo{
-		APITime:    time.Now(),
-		RemoteTime: time.Now(),
-		Message:    spwnMsg,
+		APITime:     time.Now(),
+		RemoteTime:  time.Now(),
+		Message:     spwnMsg,
+		UserMessage: spwnMsg.DefaultUserMessage(),
 	}
 
 	workflow.AddWorkflowRunInfo(run, spwnMsg)
@@ -458,7 +459,7 @@ func stopWorkflowRun(ctx context.Context, dbFunc func() *gorp.DbMap, store cache
 						continue
 					}
 
-					targetProj, errP := project.Load(dbFunc(), targetProject)
+					targetProj, errP := project.Load(ctx, dbFunc(), targetProject)
 					if errP != nil {
 						log.Error(ctx, "stopWorkflowRun> Unable to load project %v", errP)
 						continue
@@ -502,7 +503,7 @@ func updateParentWorkflowRun(ctx context.Context, dbFunc func() *gorp.DbMap, sto
 		return nil, nil
 	}
 
-	parentProj, err := project.Load(
+	parentProj, err := project.Load(context.Background(),
 		dbFunc(), run.RootRun().HookEvent.ParentWorkflow.Key,
 		project.LoadOptions.WithVariables,
 		project.LoadOptions.WithFeatures(store),
@@ -576,7 +577,7 @@ func (api *API) getWorkflowCommitsHandler() service.Handler {
 			return err
 		}
 
-		proj, errP := project.Load(api.mustDB(), key, project.LoadOptions.WithIntegrations)
+		proj, errP := project.Load(ctx, api.mustDB(), key, project.LoadOptions.WithIntegrations)
 		if errP != nil {
 			return sdk.WrapError(errP, "getWorkflowCommitsHandler> Unable to load project %s", key)
 		}
@@ -666,7 +667,7 @@ func (api *API) stopWorkflowNodeRunHandler() service.Handler {
 			return err
 		}
 
-		p, err := project.Load(api.mustDB(), key, project.LoadOptions.WithVariables)
+		p, err := project.Load(ctx, api.mustDB(), key, project.LoadOptions.WithVariables)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project")
 		}
@@ -685,20 +686,30 @@ func (api *API) stopWorkflowNodeRunHandler() service.Handler {
 			return sdk.WrapError(err, "unable to load workflow node run with id %d for workflow %s and run with number %d", workflowNodeRunID, workflowName, workflowRun.Number)
 		}
 
+		sp := sdk.SpawnMsg{ID: sdk.MsgWorkflowNodeStop.ID, Args: []interface{}{getAPIConsumer(ctx).GetUsername()}}
 		report, err := workflow.StopWorkflowNodeRun(ctx, api.mustDB, api.Cache, *p, *workflowRun, *workflowNodeRun, sdk.SpawnInfo{
-			APITime:    time.Now(),
-			RemoteTime: time.Now(),
-			Message:    sdk.SpawnMsg{ID: sdk.MsgWorkflowNodeStop.ID, Args: []interface{}{getAPIConsumer(ctx).GetUsername()}},
+			APITime:     time.Now(),
+			RemoteTime:  time.Now(),
+			Message:     sp,
+			UserMessage: sp.DefaultUserMessage(),
 		})
 		if err != nil {
 			return sdk.WrapError(err, "unable to stop workflow node run")
 		}
 
+		// Reload workflow run then resync its status
 		tx, err := api.mustDB().Begin()
 		if err != nil {
 			return sdk.WithStack(err)
 		}
 		defer tx.Rollback() // nolint
+
+		workflowRun, err = workflow.LoadRun(ctx, tx, p.Key, workflowName, workflowRunNumber, workflow.LoadRunOptions{
+			WithDeleted: true,
+		})
+		if err != nil {
+			return sdk.WrapError(err, "unable to load workflow run with number %d for workflow %s", workflowRunNumber, workflowName)
+		}
 
 		r1, err := workflow.ResyncWorkflowRunStatus(ctx, tx, workflowRun)
 		report.Merge(ctx, r1)
@@ -782,14 +793,10 @@ func (api *API) postWorkflowRunHandler() service.Handler {
 
 		// LOAD PROJECT
 		_, next := observability.Span(ctx, "project.Load")
-		p, errP := project.Load(api.mustDB(), key,
+		p, errP := project.Load(ctx, api.mustDB(), key,
 			project.LoadOptions.WithVariables,
 			project.LoadOptions.WithFeatures(api.Cache),
 			project.LoadOptions.WithIntegrations,
-			project.LoadOptions.WithApplicationVariables,
-			project.LoadOptions.WithApplicationWithDeploymentStrategies,
-			project.LoadOptions.WithEnvironments,
-			project.LoadOptions.WithPipelines,
 		)
 		next()
 		if errP != nil {
@@ -916,7 +923,7 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 	var asCodeInfosMsg []sdk.Message
 	report := new(workflow.ProcessorReport)
 
-	p, err := project.Load(api.mustDB(), projKey,
+	p, err := project.Load(ctx, api.mustDB(), projKey,
 		project.LoadOptions.WithVariables,
 		project.LoadOptions.WithFeatures(api.Cache),
 		project.LoadOptions.WithIntegrations,
@@ -962,7 +969,7 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 
 		if wf.FromRepository != "" && (workflowStartedByRepoWebHook || opts.Manual != nil) {
 			log.Debug("initWorkflowRun> rebuild workflow %s/%s from as code configuration", p.Key, wf.Name)
-			p1, err := project.Load(api.mustDB(), projKey,
+			p1, err := project.Load(ctx, api.mustDB(), projKey,
 				project.LoadOptions.WithVariables,
 				project.LoadOptions.WithGroups,
 				project.LoadOptions.WithApplicationVariables,
@@ -1011,7 +1018,6 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 		report.Merge(ctx, r)
 		return
 	}
-
 	workflow.ResyncNodeRunsWithCommits(ctx, api.mustDB(), api.Cache, *p, report)
 
 	// Purge workflow run
@@ -1020,6 +1026,16 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 			log.Error(ctx, "workflow.PurgeWorkflowRun> error %v", err)
 		}
 	}, api.PanicDump())
+
+	// Update parent
+	for i := range report.WorkflowRuns() {
+		run := &report.WorkflowRuns()[i]
+		reportParent, err := updateParentWorkflowRun(ctx, api.mustDB, api.Cache, run)
+		if err != nil {
+			log.Error(ctx, "unable to update parent workflow run: %v", err)
+		}
+		go WorkflowSendEvent(context.Background(), api.mustDB(), api.Cache, *p, reportParent)
+	}
 }
 
 func failInitWorkflowRun(ctx context.Context, db *gorp.DbMap, wfRun *sdk.WorkflowRun, err error) *workflow.ProcessorReport {
@@ -1099,7 +1115,7 @@ func (api *API) getDownloadArtifactHandler() service.Handler {
 			return sdk.NewErrorFrom(sdk.ErrInvalidID, "invalid node job run ID")
 		}
 
-		proj, err := project.Load(api.mustDB(), key, project.LoadOptions.WithIntegrations)
+		proj, err := project.Load(ctx, api.mustDB(), key, project.LoadOptions.WithIntegrations)
 		if err != nil {
 			return sdk.WrapError(err, "unable to load projet")
 		}
@@ -1238,8 +1254,10 @@ func (api *API) getWorkflowNodeRunJobSpawnInfosHandler() service.Handler {
 
 		l := r.Header.Get("Accept-Language")
 		for ki, info := range spawnInfos {
-			m := sdk.NewMessage(sdk.Messages[info.Message.ID], info.Message.Args...)
-			spawnInfos[ki].UserMessage = m.String(l)
+			if _, ok := sdk.Messages[info.Message.ID]; ok {
+				m := sdk.NewMessage(sdk.Messages[info.Message.ID], info.Message.Args...)
+				spawnInfos[ki].UserMessage = m.String(l)
+			}
 		}
 		return service.WriteJSON(w, spawnInfos, http.StatusOK)
 	}
@@ -1328,8 +1346,6 @@ func (api *API) getWorkflowNodeRunJobStepHandler() service.Handler {
 			StepLogs: *ls,
 		}
 
-		log.Debug("logs: %+v", result)
-
 		return service.WriteJSON(w, result, http.StatusOK)
 	}
 }
@@ -1360,7 +1376,7 @@ func (api *API) postResyncVCSWorkflowRunHandler() service.Handler {
 			return err
 		}
 
-		proj, err := project.Load(db, key, project.LoadOptions.WithVariables)
+		proj, err := project.Load(ctx, db, key, project.LoadOptions.WithVariables)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project")
 		}

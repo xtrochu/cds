@@ -96,7 +96,7 @@ func hookRegistration(ctx context.Context, db gorp.SqlExecutor, store cache.Stor
 
 	//Perform the request on one off the hooks service
 	if len(srvs) < 1 {
-		return sdk.WrapError(fmt.Errorf("no hooks service available, please try again"), "Unable to get services")
+		return sdk.WithStack(fmt.Errorf("no hooks service available, please try again"))
 	}
 
 	hookToUpdate := make(map[string]sdk.NodeHook)
@@ -131,15 +131,22 @@ func hookRegistration(ctx context.Context, db gorp.SqlExecutor, store cache.Stor
 			previousHook, has := oldHooks[h.UUID]
 			// If previous hook is the same, we do nothing
 			if has && h.Equals(*previousHook) {
+				// If this a repowebhook with an empty eventFilter, let's keep the old one because vcs won't be called to get the default eventFilter
+				eventFilter, has := h.GetConfigValue(sdk.HookConfigEventFilter)
+				if previousHook.IsRepositoryWebHook() && h.IsRepositoryWebHook() &&
+					(!has || eventFilter == "") {
+					h.Config[sdk.HookConfigEventFilter] = previousHook.Config[sdk.HookConfigEventFilter]
+				}
 				continue
 			}
+
 		}
 		// initialize a UUID is there no uuid
 		if h.UUID == "" {
 			h.UUID = sdk.UUID()
 		}
 
-		if h.HookModelName == sdk.RepositoryWebHookModelName || h.HookModelName == sdk.GitPollerModelName || h.HookModelName == sdk.GerritHookModelName {
+		if h.IsRepositoryWebHook() || h.HookModelName == sdk.GitPollerModelName || h.HookModelName == sdk.GerritHookModelName {
 			if wf.WorkflowData.Node.Context.ApplicationID == 0 || wf.Applications[wf.WorkflowData.Node.Context.ApplicationID].RepositoryFullname == "" || wf.Applications[wf.WorkflowData.Node.Context.ApplicationID].VCSServer == "" {
 				return sdk.NewErrorFrom(sdk.ErrForbidden, "cannot create a git poller or repository webhook on an application without a repository")
 			}
@@ -157,6 +164,7 @@ func hookRegistration(ctx context.Context, db gorp.SqlExecutor, store cache.Stor
 			return err
 		}
 		hookToUpdate[h.UUID] = *h
+		log.Debug("workflow.hookrRegistration> following hook must be updated: %+v", h)
 	}
 
 	if len(hookToUpdate) > 0 {
@@ -179,15 +187,18 @@ func hookRegistration(ctx context.Context, db gorp.SqlExecutor, store cache.Stor
 				continue
 			}
 			v, ok := h.Config[sdk.HookConfigWebHookID]
-			if h.HookModelName == sdk.RepositoryWebHookModelName && h.Config["vcsServer"].Value != "" {
+			if h.IsRepositoryWebHook() {
+				log.Debug("workflow.hookRegistration> managing vcs configuration: %+v", h)
+			}
+			if h.IsRepositoryWebHook() && h.Config["vcsServer"].Value != "" {
 				if !ok || v.Value == "" {
 					if err := createVCSConfiguration(ctx, db, store, proj, h); err != nil {
-						return sdk.WrapError(err, "Cannot create vcs configuration")
+						return sdk.WithStack(err)
 					}
 				}
 				if ok && v.Value != "" {
 					if err := updateVCSConfiguration(ctx, db, store, proj, h); err != nil {
-						return sdk.WrapError(err, "Cannot update vcs configuration")
+						return sdk.WithStack(err)
 					}
 				}
 			}
@@ -279,23 +290,23 @@ func createVCSConfiguration(ctx context.Context, db gorp.SqlExecutor, store cach
 
 	client, err := repositoriesmanager.AuthorizedClient(ctx, db, store, proj.Key, projectVCSServer)
 	if err != nil {
-		return sdk.WrapError(err, "createVCSConfiguration> Cannot get vcs client")
+		return sdk.WrapError(err, "cannot get vcs client")
 	}
 	// We have to check the repository to know if webhooks are supported and how (events)
-	webHookInfo, errWH := repositoriesmanager.GetWebhooksInfos(ctx, client)
-	if errWH != nil {
-		return sdk.WrapError(errWH, "createVCSConfiguration> Cannot get vcs web hook info")
+	webHookInfo, err := repositoriesmanager.GetWebhooksInfos(ctx, client)
+	if err != nil {
+		return sdk.WrapError(err, "cannot get vcs web hook info")
 	}
 	if !webHookInfo.WebhooksSupported || webHookInfo.WebhooksDisabled {
-		return sdk.WrapError(sdk.ErrForbidden, "createVCSConfiguration> hook creation are forbidden")
+		return sdk.NewErrorFrom(sdk.ErrForbidden, "hook creation are forbidden")
 	}
 
 	// Check hook config to avoid sending wrong hooks to VCS
 	if h.Config["repoFullName"].Value == "" {
-		return sdk.WrapError(sdk.ErrInvalidHookConfiguration, "wrong repoFullName value for hook")
+		return sdk.WrapError(sdk.ErrInvalidHookConfiguration, "missing repo fullname value for hook")
 	}
 	if !sdk.IsURL(h.Config["webHookURL"].Value) {
-		return sdk.WrapError(sdk.ErrInvalidHookConfiguration, "wrong webHookURL value (project: %s, repository: %s)", proj.Key, h.Config["repoFullName"].Value)
+		return sdk.WrapError(sdk.ErrInvalidHookConfiguration, "given webhook url value %s is not a url", h.Config["webHookURL"].Value)
 	}
 
 	// Prepare the hook that will be send to VCS

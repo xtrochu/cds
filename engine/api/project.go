@@ -234,7 +234,7 @@ func (api *API) updateProjectHandler() service.Handler {
 		}
 
 		// Check is project exist
-		p, errProj := project.Load(api.mustDB(), key, project.LoadOptions.WithIcon)
+		p, errProj := project.Load(ctx, api.mustDB(), key, project.LoadOptions.WithIcon)
 		if errProj != nil {
 			return sdk.WrapError(errProj, "updateProject> Cannot load project from db")
 		}
@@ -331,7 +331,7 @@ func (api *API) getProjectHandler() service.Handler {
 			opts = append(opts, project.LoadOptions.WithLabels)
 		}
 
-		p, errProj := project.Load(api.mustDB(), key, opts...)
+		p, errProj := project.Load(ctx, api.mustDB(), key, opts...)
 		if errProj != nil {
 			return sdk.WrapError(errProj, "getProjectHandler (%s)", key)
 		}
@@ -372,7 +372,7 @@ func (api *API) putProjectLabelsHandler() service.Handler {
 		}
 
 		// Check if project exist
-		proj, err := project.Load(db, key, project.LoadOptions.WithLabels)
+		proj, err := project.Load(ctx, db, key, project.LoadOptions.WithLabels)
 		if err != nil {
 			return err
 		}
@@ -433,7 +433,7 @@ func (api *API) putProjectLabelsHandler() service.Handler {
 			return sdk.WithStack(err)
 		}
 
-		p, errP := project.Load(db, key,
+		p, errP := project.Load(ctx, db, key,
 			project.LoadOptions.WithLabels, project.LoadOptions.WithWorkflowNames, project.LoadOptions.WithVariables,
 			project.LoadOptions.WithFavorites(getAPIConsumer(ctx).AuthentifiedUser.ID),
 			project.LoadOptions.WithKeys, project.LoadOptions.WithPermission, project.LoadOptions.WithIntegrations)
@@ -482,7 +482,7 @@ func (api *API) postProjectHandler() service.Handler {
 			return sdk.WrapError(errExist, "cannot check if project %s exist", p.Key)
 		}
 		if exist {
-			return sdk.WrapError(sdk.ErrConflict, "project %s already exists", p.Key)
+			return sdk.NewErrorFrom(sdk.ErrAlreadyExist, "project %s already exists", p.Key)
 		}
 
 		if err := project.Insert(tx, &p); err != nil {
@@ -565,25 +565,15 @@ func (api *API) postProjectHandler() service.Handler {
 		for i := range p.Keys {
 			k := &p.Keys[i]
 			k.ProjectID = p.ID
-			switch k.Type {
-			case sdk.KeyTypeSSH:
-				keyTemp, err := keys.GenerateSSHKey(k.Name)
-				if err != nil {
-					return sdk.WrapError(err, "cannot generate ssh key for project %s", p.Name)
-				}
-				k.Private = keyTemp.Private
-				k.Public = keyTemp.Public
-				k.Type = keyTemp.Type
-			case sdk.KeyTypePGP:
-				keyTemp, err := keys.GeneratePGPKeyPair(k.Name)
-				if err != nil {
-					return sdk.WrapError(err, "cannot generate pgp key for project %s", p.Name)
-				}
-				k.Private = keyTemp.Private
-				k.Public = keyTemp.Public
-				k.Type = keyTemp.Type
-				k.KeyID = keyTemp.KeyID
+
+			newKey, err := keys.GenerateKey(k.Name, k.Type)
+			if err != nil {
+				return err
 			}
+			k.Private = newKey.Private
+			k.Public = newKey.Public
+			k.KeyID = newKey.KeyID
+
 			if err := project.InsertKey(tx, k); err != nil {
 				return sdk.WrapError(err, "cannot add key %s in project %s", k.Name, p.Name)
 			}
@@ -607,7 +597,7 @@ func (api *API) postProjectHandler() service.Handler {
 
 		event.PublishAddProject(ctx, &p, consumer)
 
-		proj, err := project.Load(api.mustDB(), p.Key,
+		proj, err := project.Load(ctx, api.mustDB(), p.Key,
 			project.LoadOptions.WithLabels,
 			project.LoadOptions.WithWorkflowNames,
 			project.LoadOptions.WithFavorites(consumer.AuthentifiedUser.ID),
@@ -632,7 +622,7 @@ func (api *API) deleteProjectHandler() service.Handler {
 		vars := mux.Vars(r)
 		key := vars[permProjectKey]
 
-		p, err := project.Load(api.mustDB(), key, project.LoadOptions.WithPipelines, project.LoadOptions.WithApplications)
+		p, err := project.Load(ctx, api.mustDB(), key, project.LoadOptions.WithPipelines, project.LoadOptions.WithApplications)
 		if err != nil {
 			if !sdk.ErrorIs(err, sdk.ErrNoProject) {
 				return sdk.WrapError(err, "deleteProject> load project '%s' from db", key)
@@ -641,11 +631,11 @@ func (api *API) deleteProjectHandler() service.Handler {
 		}
 
 		if len(p.Pipelines) > 0 {
-			return sdk.WrapError(sdk.ErrProjectHasPipeline, "deleteProject> Project '%s' still used by %d pipelines", key, len(p.Pipelines))
+			return sdk.WrapError(sdk.ErrProjectHasPipeline, "project '%s' still used by %d pipelines", key, len(p.Pipelines))
 		}
 
 		if len(p.Applications) > 0 {
-			return sdk.WrapError(sdk.ErrProjectHasApplication, "deleteProject> Project '%s' still used by %d applications", key, len(p.Applications))
+			return sdk.WrapError(sdk.ErrProjectHasApplication, "project '%s' still used by %d applications", key, len(p.Applications))
 		}
 
 		tx, errBegin := api.mustDB().Begin()

@@ -24,22 +24,12 @@ var (
 func (api *API) InitRouter() {
 	api.Router.URL = api.Config.URL.API
 	api.Router.SetHeaderFunc = DefaultHeaders
-	api.Router.Middlewares = append(api.Router.Middlewares, api.authMiddleware, api.tracingMiddleware, api.maintenanceMiddleware)
+	api.Router.Middlewares = append(api.Router.Middlewares, api.tracingMiddleware, api.authMiddleware, api.maintenanceMiddleware)
 	api.Router.PostMiddlewares = append(api.Router.PostMiddlewares, TracingPostMiddleware)
 
 	r := api.Router
 
 	log.Info(api.Router.Background, "Initializing Events broker")
-	// Initialize event broker
-	api.eventsBroker = &eventsBroker{
-		router:   api.Router,
-		cache:    api.Cache,
-		clients:  make(map[string]*eventsBrokerSubscribe),
-		dbFunc:   api.DBConnectionFactory.GetDBMap,
-		messages: make(chan sdk.Event),
-	}
-	api.eventsBroker.Init(r.Background, api.PanicDump())
-
 	api.websocketBroker = &websocketBroker{
 		router:           api.Router,
 		cache:            api.Cache,
@@ -189,6 +179,7 @@ func (api *API) InitRouter() {
 
 	// Application
 	r.Handle("/project/{permProjectKey}/application/{applicationName}", Scope(sdk.AuthConsumerScopeProject), r.GET(api.getApplicationHandler), r.PUT(api.updateApplicationHandler), r.DELETE(api.deleteApplicationHandler))
+	r.Handle("/project/{permProjectKey}/application/{applicationName}/ascode", Scope(sdk.AuthConsumerScopeProject), r.PUT(api.updateAsCodeApplicationHandler))
 	r.Handle("/project/{permProjectKey}/application/{applicationName}/metrics/{metricName}", Scope(sdk.AuthConsumerScopeProject), r.GET(api.getApplicationMetricHandler))
 	r.Handle("/project/{permProjectKey}/application/{applicationName}/keys", Scope(sdk.AuthConsumerScopeProject), r.GET(api.getKeysInApplicationHandler), r.POST(api.addKeyInApplicationHandler))
 	r.Handle("/project/{permProjectKey}/application/{applicationName}/keys/{name}", Scope(sdk.AuthConsumerScopeProject), r.DELETE(api.deleteKeyInApplicationHandler))
@@ -267,12 +258,12 @@ func (api *API) InitRouter() {
 	// Workflows run
 	r.Handle("/project/{permProjectKey}/runs", Scope(sdk.AuthConsumerScopeProject), r.GET(api.getWorkflowAllRunsHandler, EnableTracing()))
 	r.Handle("/project/{key}/workflows/{permWorkflowName}/artifact/{artifactId}", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getDownloadArtifactHandler))
-	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowRunsHandler, EnableTracing()), r.POSTEXECUTE(api.postWorkflowRunHandler /*, AllowServices(true)*/, EnableTracing()))
-	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/branch/{branch}", Scope(sdk.AuthConsumerScopeRun), r.DELETE(api.deleteWorkflowRunsBranchHandler /*, NeedService()*/))
+	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowRunsHandler, EnableTracing()), r.POSTEXECUTE(api.postWorkflowRunHandler, EnableTracing()))
+	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/branch/{branch}", Scope(sdk.AuthConsumerScopeRun), r.DELETE(api.deleteWorkflowRunsBranchHandler))
 	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/latest", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getLatestWorkflowRunHandler))
 	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/tags", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowRunTagsHandler))
 	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/num", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowRunNumHandler), r.POST(api.postWorkflowRunNumHandler))
-	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/{number}", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowRunHandler /*, AllowServices(true)*/, EnableTracing()), r.DELETE(api.deleteWorkflowRunHandler))
+	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/{number}", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowRunHandler, EnableTracing()), r.DELETE(api.deleteWorkflowRunHandler))
 	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/{number}/stop", Scope(sdk.AuthConsumerScopeRun), r.POSTEXECUTE(api.stopWorkflowRunHandler, EnableTracing(), MaintenanceAware()))
 	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/{number}/vcs/resync", Scope(sdk.AuthConsumerScopeRun), r.POSTEXECUTE(api.postResyncVCSWorkflowRunHandler))
 	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/{number}/artifacts", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowRunArtifactsHandler))
@@ -287,14 +278,15 @@ func (api *API) InitRouter() {
 	r.Handle("/project/{key}/workflows/{permWorkflowName}/hook/triggers/condition", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowTriggerHookConditionHandler))
 	r.Handle("/project/{key}/workflows/{permWorkflowName}/triggers/condition", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowTriggerConditionHandler))
 	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/{number}/nodes/{nodeRunID}/release", Scope(sdk.AuthConsumerScopeRun), r.POST(api.releaseApplicationWorkflowHandler, MaintenanceAware()))
-	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/{number}/hooks/{hookRunID}/callback", Scope(sdk.AuthConsumerScopeRun), r.POST(api.postWorkflowJobHookCallbackHandler, MaintenanceAware() /*, AllowServices(true)*/))
-	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/{number}/hooks/{hookRunID}/details", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowJobHookDetailsHandler /*, NeedService()*/))
+	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/{number}/hooks/{hookRunID}/callback", Scope(sdk.AuthConsumerScopeRun), r.POST(api.postWorkflowJobHookCallbackHandler, MaintenanceAware()))
+	r.Handle("/project/{key}/workflows/{permWorkflowName}/runs/{number}/hooks/{hookRunID}/details", Scope(sdk.AuthConsumerScopeRun), r.GET(api.getWorkflowJobHookDetailsHandler))
 
 	// Environment
 	r.Handle("/project/{permProjectKey}/environment", Scope(sdk.AuthConsumerScopeProject), r.GET(api.getEnvironmentsHandler), r.POST(api.addEnvironmentHandler))
 	r.Handle("/project/{permProjectKey}/environment/import", Scope(sdk.AuthConsumerScopeProject), r.POST(api.importNewEnvironmentHandler, DEPRECATED))
 	r.Handle("/project/{permProjectKey}/environment/import/{environmentName}", Scope(sdk.AuthConsumerScopeProject), r.POST(api.importIntoEnvironmentHandler, DEPRECATED))
 	r.Handle("/project/{permProjectKey}/environment/{environmentName}", Scope(sdk.AuthConsumerScopeProject), r.GET(api.getEnvironmentHandler), r.PUT(api.updateEnvironmentHandler), r.DELETE(api.deleteEnvironmentHandler))
+	r.Handle("/project/{permProjectKey}/environment/{environmentName}/ascode", Scope(sdk.AuthConsumerScopeProject), r.PUT(api.updateAsCodeEnvironmentHandler))
 	r.Handle("/project/{permProjectKey}/environment/{environmentName}/usage", Scope(sdk.AuthConsumerScopeProject), r.GET(api.getEnvironmentUsageHandler))
 	r.Handle("/project/{permProjectKey}/environment/{environmentName}/keys", Scope(sdk.AuthConsumerScopeProject), r.GET(api.getKeysInEnvironmentHandler), r.POST(api.addKeyInEnvironmentHandler))
 	r.Handle("/project/{permProjectKey}/environment/{environmentName}/keys/{name}", Scope(sdk.AuthConsumerScopeProject), r.DELETE(api.deleteKeyInEnvironmentHandler))
@@ -415,7 +407,6 @@ func (api *API) InitRouter() {
 	r.Handle("/workflow/hook/model/{model}", ScopeNone(), r.GET(api.getWorkflowHookModelHandler), r.POST(api.postWorkflowHookModelHandler, NeedAdmin(true)), r.PUT(api.putWorkflowHookModelHandler, NeedAdmin(true)))
 
 	// SSE
-	r.Handle("/events", ScopeNone(), r.GET(api.eventsBroker.ServeHTTP))
 	r.Handle("/ws", ScopeNone(), r.GET(api.websocketBroker.ServeHTTP))
 
 	// Feature

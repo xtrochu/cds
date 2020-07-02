@@ -96,7 +96,7 @@ func syncTakeJobInNodeRun(ctx context.Context, db gorp.SqlExecutor, n *sdk.Workf
 
 	// Save the node run in database
 	if err := updateNodeRunStatusAndStage(db, n); err != nil {
-		return nil, sdk.WrapError(fmt.Errorf("Unable to update node id=%d at status %s. err:%s", n.ID, n.Status, err), "workflow.syncTakeJobInNodeRun> Unable to execute node")
+		return nil, sdk.WrapError(err, "unable to update node id=%d at status %s", n.ID, n.Status)
 	}
 	return report, nil
 }
@@ -529,16 +529,19 @@ jobLoop:
 				}
 				msg.Args = []interface{}{sdk.Cause(e).Error()}
 				wjob.SpawnInfos = append(wjob.SpawnInfos, sdk.SpawnInfo{
-					APITime:    time.Now(),
-					Message:    msg,
-					RemoteTime: time.Now(),
+					APITime:     time.Now(),
+					Message:     msg,
+					RemoteTime:  time.Now(),
+					UserMessage: msg.DefaultUserMessage(),
 				})
 			}
 		} else {
+			sp := sdk.SpawnMsg{ID: sdk.MsgSpawnInfoJobInQueue.ID}
 			wjob.SpawnInfos = []sdk.SpawnInfo{{
-				APITime:    time.Now(),
-				Message:    sdk.SpawnMsg{ID: sdk.MsgSpawnInfoJobInQueue.ID},
-				RemoteTime: time.Now(),
+				APITime:     time.Now(),
+				Message:     sp,
+				RemoteTime:  time.Now(),
+				UserMessage: sp.DefaultUserMessage(),
 			}}
 		}
 
@@ -848,13 +851,13 @@ func stopWorkflowNodeOutGoingHook(ctx context.Context, dbFunc func() *gorp.DbMap
 
 	srvs, err := services.LoadAllByType(ctx, db, services.TypeHooks)
 	if err != nil {
-		return fmt.Errorf("unable to get hooks services: %v", err)
+		return sdk.WrapError(err, "unable to get hooks services")
 	}
 
 	if nodeRun.HookExecutionID != "" {
 		path := fmt.Sprintf("/task/%s/execution/%d/stop", nodeRun.HookExecutionID, nodeRun.HookExecutionTimeStamp)
 		if _, _, err := services.NewClient(db, srvs).DoJSONRequest(ctx, "POST", path, nil, nil); err != nil {
-			return fmt.Errorf("unable to stop task execution: %v", err)
+			return sdk.WrapError(err, "unable to stop task execution")
 		}
 	}
 
@@ -953,14 +956,14 @@ func stopWorkflowNodeJobRun(ctx context.Context, dbFunc func() *gorp.DbMap, stor
 		njr, errNRJ := LoadAndLockNodeJobRunWait(ctx, tx, store, njrID)
 		if errNRJ != nil {
 			chanErr <- sdk.WrapError(errNRJ, "StopWorkflowNodeRun> Cannot load node job run id")
-			tx.Rollback()
+			_ = tx.Rollback()
 			wg.Done()
 			return report
 		}
 
 		if err := AddSpawnInfosNodeJobRun(tx, njr.WorkflowNodeRunID, njr.ID, []sdk.SpawnInfo{stopInfos}); err != nil {
 			chanErr <- sdk.WrapError(err, "Cannot save spawn info job %d", njr.ID)
-			tx.Rollback()
+			_ = tx.Rollback()
 			wg.Done()
 			return report
 		}
@@ -970,14 +973,14 @@ func stopWorkflowNodeJobRun(ctx context.Context, dbFunc func() *gorp.DbMap, stor
 		report.Merge(ctx, r)
 		if err != nil {
 			chanErr <- sdk.WrapError(err, "cannot update node job run")
-			tx.Rollback()
+			_ = tx.Rollback()
 			wg.Done()
 			return report
 		}
 
 		if err := tx.Commit(); err != nil {
 			chanErr <- sdk.WithStack(err)
-			tx.Rollback()
+			_ = tx.Rollback()
 			wg.Done()
 			return report
 		}
@@ -1074,7 +1077,7 @@ func getVCSInfos(ctx context.Context, db gorp.SqlExecutor, store cache.Store, pr
 	// Check repository value
 	if vcsInfos.Repository == "" {
 		vcsInfos.Repository = applicationRepositoryFullname
-	} else if strings.ToLower(vcsInfos.Repository) != strings.ToLower(applicationRepositoryFullname) {
+	} else if !strings.EqualFold(vcsInfos.Repository, applicationRepositoryFullname) {
 		//The input repository is not the same as the application, we have to check if it is a fork
 		forks, err := client.ListForks(ctx, applicationRepositoryFullname)
 		if err != nil {
@@ -1090,7 +1093,7 @@ func getVCSInfos(ctx context.Context, db gorp.SqlExecutor, store cache.Store, pr
 
 		//If it's not a fork; reset this value to the application repository
 		if !forkFound {
-			return nil, sdk.NewError(sdk.ErrNotFound, fmt.Errorf("repository %s not found", vcsInfos.Repository))
+			return nil, sdk.NewErrorFrom(sdk.ErrNotFound, "repository %s not found", vcsInfos.Repository)
 		}
 	}
 

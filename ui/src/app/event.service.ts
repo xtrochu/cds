@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import { AppService } from 'app/app.service';
-import { AuthentifiedUser } from 'app/model/user.model';
 import { WebSocketEvent, WebSocketMessage } from 'app/model/websocket.model';
 import { ToastService } from 'app/shared/toast/ToastService';
 import { WebSocketSubject } from 'rxjs/internal-compatibility';
@@ -21,14 +20,12 @@ export class EventService {
         private _toastService: ToastService
     ) {}
 
-    startWebsocket(user: AuthentifiedUser) {
-        if (!user.isAdmin()) {
-            return
+    stopWebsocket() {
+        if (this.websocket) {
+            this.websocket.complete();
         }
-        if (!localStorage.getItem('WS-EVENT')) {
-            return
-        }
-        console.log('Starting websocket');
+    }
+    startWebsocket() {
         const protocol = window.location.protocol.replace('http', 'ws');
         const host = window.location.host;
         const href = this._router['location']._baseHref;

@@ -114,7 +114,7 @@ func Test_postEnvironmentImportHandler_NewEnvFromYAMLWithKeysAndSecrets(t *testi
 		t.Fatal(err)
 	}
 
-	require.NoError(t, environment.InsertVariable(db, env.ID, &sdk.Variable{
+	require.NoError(t, environment.InsertVariable(db, env.ID, &sdk.EnvironmentVariable{
 		Name:  "myPassword",
 		Type:  sdk.SecretVariable,
 		Value: "MySecretValue",
@@ -231,7 +231,7 @@ func Test_postEnvironmentImportHandler_NewEnvFromYAMLWithKeysAndSecretsAndReImpo
 		t.Fatal(err)
 	}
 
-	require.NoError(t, environment.InsertVariable(db, env.ID, &sdk.Variable{
+	require.NoError(t, environment.InsertVariable(db, env.ID, &sdk.EnvironmentVariable{
 		Name:  "myPassword",
 		Type:  sdk.SecretVariable,
 		Value: "MySecretValue",
@@ -474,7 +474,7 @@ name: myNewEnv`
 	//Do the request
 	rec := httptest.NewRecorder()
 	api.Router.Mux.ServeHTTP(rec, req)
-	assert.Equal(t, 409, rec.Code)
+	assert.Equal(t, 403, rec.Code)
 
 	//Check result
 	t.Logf(">>%s", rec.Body.String())

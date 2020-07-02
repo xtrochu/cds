@@ -172,7 +172,7 @@ func testRunWorkflow(t *testing.T, api *API, router *Router) testRunWorkflowCtx 
 		},
 	}
 
-	proj2, errP := project.Load(api.mustDB(), proj.Key, project.LoadOptions.WithPipelines, project.LoadOptions.WithGroups)
+	proj2, errP := project.Load(context.TODO(), api.mustDB(), proj.Key, project.LoadOptions.WithPipelines, project.LoadOptions.WithGroups)
 	require.NoError(t, errP)
 
 	require.NoError(t, workflow.Insert(context.TODO(), api.mustDB(), api.Cache, *proj2, &w))
@@ -495,63 +495,6 @@ func Test_postTakeWorkflowJobHandler(t *testing.T) {
 	wkrDB, err := worker.LoadWorkerByIDWithDecryptKey(context.TODO(), api.mustDB(), ctx.worker.ID)
 	assert.NoError(t, err)
 	assert.Len(t, wkrDB.PrivateKey, 32)
-}
-
-func Test_postTakeWorkflowJobHandlerDefautlRegion(t *testing.T) {
-	api, _, router := newTestAPI(t)
-
-	ctx := testRunWorkflow(t, api, router)
-	testGetWorkflowJobAsWorker(t, api, router, &ctx)
-	require.NotNil(t, ctx.job)
-
-	//Prepare request
-	vars := map[string]string{
-		"key":              ctx.project.Key,
-		"permWorkflowName": ctx.workflow.Name,
-		"id":               fmt.Sprintf("%d", ctx.job.ID),
-	}
-
-	//Register the worker
-	testRegisterWorker(t, api, router, &ctx)
-
-	// Add cdn config
-	api.Config.CDN = cdn.Configuration{
-		TCP: sdk.TCPServer{
-			Port: 8090,
-			Addr: "localhost",
-		},
-	}
-
-	uri := router.GetRoute("POST", api.postTakeWorkflowJobHandler, vars)
-	require.NotEmpty(t, uri)
-
-	workflow.SetDefaultRegion("my-region")
-
-	//This call must work
-	req := assets.NewJWTAuthentifiedRequest(t, ctx.workerToken, "POST", uri, nil)
-	rec := httptest.NewRecorder()
-	router.Mux.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	pbji := &sdk.WorkflowNodeJobRunData{}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), pbji))
-
-	run, err := workflow.LoadNodeJobRun(context.TODO(), api.mustDB(), api.Cache, ctx.job.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "Building", run.Status)
-	assert.Equal(t, ctx.model.Name, run.Model)
-	assert.Equal(t, ctx.worker.Name, run.WorkerName)
-	assert.NotEmpty(t, run.HatcheryName)
-
-	var found bool
-	for _, v := range run.Job.Action.Requirements {
-		if v.Type == sdk.RegionRequirement {
-			require.Equal(t, "my-region", v.Value)
-			found = true
-		}
-	}
-	require.Equal(t, true, found)
-
 }
 
 func Test_postTakeWorkflowInvalidJobHandler(t *testing.T) {
@@ -1103,7 +1046,7 @@ func TestWorkerPrivateKey(t *testing.T) {
 		},
 	}
 
-	p, err := project.Load(db, proj.Key, project.LoadOptions.WithPipelines, project.LoadOptions.WithApplications)
+	p, err := project.Load(context.TODO(), db, proj.Key, project.LoadOptions.WithPipelines, project.LoadOptions.WithApplications)
 	assert.NoError(t, err)
 	assert.NoError(t, workflow.Insert(context.TODO(), db, api.Cache, *p, &w))
 
@@ -1219,7 +1162,7 @@ func TestPostVulnerabilityReportHandler(t *testing.T) {
 		},
 	}
 
-	p, err := project.Load(db, proj.Key, project.LoadOptions.WithPipelines, project.LoadOptions.WithApplications)
+	p, err := project.Load(context.TODO(), db, proj.Key, project.LoadOptions.WithPipelines, project.LoadOptions.WithApplications)
 	assert.NoError(t, err)
 	assert.NoError(t, workflow.Insert(context.TODO(), db, api.Cache, *p, &w))
 
@@ -1353,7 +1296,7 @@ func TestInsertNewCodeCoverageReport(t *testing.T) {
 		VCSServer:          "repoManServ",
 	}
 	require.NoError(t, application.Insert(db, proj.ID, &app))
-	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app))
 
 	// Create workflow
 	w := sdk.Workflow{
@@ -1373,7 +1316,7 @@ func TestInsertNewCodeCoverageReport(t *testing.T) {
 		},
 	}
 
-	p, err := project.Load(db, proj.Key, project.LoadOptions.WithPipelines, project.LoadOptions.WithApplications)
+	p, err := project.Load(context.TODO(), db, proj.Key, project.LoadOptions.WithPipelines, project.LoadOptions.WithApplications)
 	require.NoError(t, err)
 	require.NoError(t, workflow.Insert(context.TODO(), db, api.Cache, *p, &w))
 

@@ -18,7 +18,7 @@ import (
 
 func deleteAll(t *testing.T, api *API, key string) {
 	t.Logf("start deleted : %s", key)
-	proj, _ := project.Load(api.mustDB(), key, project.LoadOptions.WithGroups)
+	proj, _ := project.Load(context.TODO(), api.mustDB(), key, project.LoadOptions.WithGroups)
 	if proj == nil {
 		return
 	}

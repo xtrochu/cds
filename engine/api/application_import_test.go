@@ -117,7 +117,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testi
 		t.Fatal(err)
 	}
 
-	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.Variable{
+	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.ApplicationVariable{
 		Name:  "myPassword",
 		Type:  sdk.SecretVariable,
 		Value: "MySecretValue",
@@ -225,7 +225,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 		t.Fatal(err)
 	}
 
-	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.Variable{
+	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.ApplicationVariable{
 		Name:  "myPassword",
 		Type:  sdk.SecretVariable,
 		Value: "MySecretValue",
@@ -401,7 +401,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	k2.KeyID = kssh.KeyID
 	require.NoError(t, application.InsertKey(api.mustDB(), k2))
 
-	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.Variable{
+	require.NoError(t, application.InsertVariable(api.mustDB(), app.ID, &sdk.ApplicationVariable{
 		Name:  "myPassword",
 		Type:  sdk.SecretVariable,
 		Value: "MySecretValue",
@@ -590,7 +590,7 @@ name: myNewApp`
 	//Do the request
 	rec := httptest.NewRecorder()
 	api.Router.Mux.ServeHTTP(rec, req)
-	assert.Equal(t, 409, rec.Code)
+	assert.Equal(t, 403, rec.Code)
 
 	//Check result
 	t.Logf(">>%s", rec.Body.String())

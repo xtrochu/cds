@@ -50,7 +50,7 @@ func TestResyncCommitStatusNotifDisabled(t *testing.T) {
 		},
 	}
 	require.NoError(t, application.Insert(db, proj.ID, &app))
-	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app))
 
 	tr := true
 	wr := &sdk.WorkflowRun{
@@ -147,7 +147,7 @@ func TestResyncCommitStatusSetStatus(t *testing.T) {
 		},
 	}
 	require.NoError(t, application.Insert(db, proj.ID, &app))
-	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app))
 
 	tr := true
 	wr := &sdk.WorkflowRun{
@@ -250,7 +250,7 @@ func TestResyncCommitStatusCommentPR(t *testing.T) {
 		},
 	}
 	require.NoError(t, application.Insert(db, proj.ID, &app))
-	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app))
 
 	tr := true
 	fls := false
@@ -367,7 +367,7 @@ func TestResyncCommitStatusCommentPRNotTerminated(t *testing.T) {
 		},
 	}
 	require.NoError(t, application.Insert(db, proj.ID, &app))
-	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app))
 
 	tr := true
 	fls := false
@@ -475,7 +475,7 @@ func TestResyncCommitStatusCommitCache(t *testing.T) {
 		},
 	}
 	require.NoError(t, application.Insert(db, proj.ID, &app))
-	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app, proj.Key))
+	require.NoError(t, repositoriesmanager.InsertForApplication(db, &app))
 
 	tr := true
 	fls := false

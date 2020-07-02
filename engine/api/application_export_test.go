@@ -24,7 +24,7 @@ func Test_getApplicationExportHandler(t *testing.T) {
 	}
 	require.NoError(t, application.Insert(db, proj.ID, app))
 
-	v1 := sdk.Variable{
+	v1 := sdk.ApplicationVariable{
 		Name:  "var1",
 		Value: "value 1",
 		Type:  sdk.StringVariable,
@@ -32,7 +32,7 @@ func Test_getApplicationExportHandler(t *testing.T) {
 
 	require.NoError(t, application.InsertVariable(db, app.ID, &v1, u))
 
-	v2 := sdk.Variable{
+	v2 := sdk.ApplicationVariable{
 		Name:  "var2",
 		Value: "value 2",
 		Type:  sdk.SecretVariable,
