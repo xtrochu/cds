@@ -8,7 +8,6 @@ import (
 
 	"github.com/ovh/cds/engine/api/application"
 	"github.com/ovh/cds/engine/api/metrics"
-	"github.com/ovh/cds/engine/api/project"
 	"github.com/ovh/cds/engine/service"
 	"github.com/ovh/cds/sdk"
 )
@@ -20,17 +19,12 @@ func (api *API) getApplicationMetricHandler() service.Handler {
 		appName := vars["applicationName"]
 		metricName := vars["metricName"]
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName)
 		if err != nil {
 			return err
 		}
 
-		result, err := metrics.GetMetrics(ctx, api.mustDB(), proj.Key, app.ID, metricName)
+		result, err := metrics.GetMetrics(ctx, api.mustDB(), projectKey, app.ID, metricName)
 		if err != nil {
 			return sdk.WrapError(err, "cannot get metrics")
 		}

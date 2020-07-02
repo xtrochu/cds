@@ -321,13 +321,13 @@ func (api *API) deleteRepositoriesManagerHandler() service.Handler {
 
 		force := FormBool(r, "force")
 
-		p, err := project.Load(api.mustDB(), projectKey)
+		proj, err := project.Load(api.mustDB(), projectKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
 
 		// Load the repositories manager from the DB
-		vcsServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, api.mustDB(), projectKey, rmName)
+		vcsServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, api.mustDB(), proj.Key, rmName)
 		if err != nil {
 			return err
 		}
@@ -340,7 +340,7 @@ func (api *API) deleteRepositoriesManagerHandler() service.Handler {
 
 		if !force {
 			// Check that the VCS is not used by an application before removing it
-			apps, err := application.LoadAll(ctx, tx, p.ID)
+			apps, err := application.LoadAllByProjectKey(ctx, tx, proj.Key)
 			if err != nil {
 				return err
 			}
@@ -359,9 +359,9 @@ func (api *API) deleteRepositoriesManagerHandler() service.Handler {
 			return sdk.WithStack(err)
 		}
 
-		event.PublishDeleteVCSServer(ctx, p, vcsServer.Name, getAPIConsumer(ctx))
+		event.PublishDeleteVCSServer(ctx, proj, vcsServer.Name, getAPIConsumer(ctx))
 
-		return service.WriteJSON(w, p, http.StatusOK)
+		return service.WriteJSON(w, proj, http.StatusOK)
 	}
 }
 
@@ -464,7 +464,7 @@ func (api *API) attachRepositoriesManagerHandler() service.Handler {
 			return sdk.WrapError(err, "cannot load project %s", projectKey)
 		}
 
-		app, err := application.LoadByProjectIDAndName(ctx, db, proj.ID, appName)
+		app, err := application.LoadByProjectKeyAndName(ctx, db, proj.Key, appName)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application %s", appName)
 		}
@@ -571,12 +571,7 @@ func (api *API) detachRepositoriesManagerHandler() service.Handler {
 		db := api.mustDB()
 		u := getAPIConsumer(ctx)
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, db, proj.ID, appName)
+		app, err := application.LoadByProjectKeyAndName(ctx, db, projectKey, appName)
 		if err != nil {
 			return err
 		}

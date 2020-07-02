@@ -24,7 +24,7 @@ func deleteAll(t *testing.T, api *API, key string) {
 	}
 
 	// Delete all apps
-	apps, err := application.LoadAll(context.TODO(), api.mustDB(), proj.ID)
+	apps, err := application.LoadAllByProjectKey(context.TODO(), api.mustDB(), proj.Key)
 	require.NoError(t, err)
 	for _, app := range apps {
 		require.NoError(t, application.DeleteApplication(api.mustDB(), app.ID))

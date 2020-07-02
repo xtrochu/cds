@@ -1003,7 +1003,7 @@ func checkApplication(ctx context.Context, db gorp.SqlExecutor, proj sdk.Project
 		return nil
 	}
 	if n.Context.ApplicationName != "" {
-		appDB, err := application.LoadByProjectIDAndName(ctx, db, proj.ID, n.Context.ApplicationName,
+		appDB, err := application.LoadByProjectKeyAndName(ctx, db, proj.Key, n.Context.ApplicationName,
 			application.LoadOptions.WithDeploymentStrategies,
 			application.LoadOptions.WithVariables,
 		)

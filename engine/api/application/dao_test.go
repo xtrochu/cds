@@ -29,7 +29,7 @@ func TestLoadByNameAsAdmin(t *testing.T) {
 	}
 	require.NoError(t, application.Insert(db, proj.ID, &app))
 
-	actual, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "my-app")
+	actual, err := application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "my-app")
 	require.NoError(t, err)
 
 	assert.Equal(t, app.Name, actual.Name)
@@ -48,7 +48,7 @@ func TestLoadByNameAsUser(t *testing.T) {
 
 	_, _ = assets.InsertLambdaUser(t, db, &proj.ProjectGroups[0].Group)
 
-	actual, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "my-app")
+	actual, err := application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "my-app")
 	require.NoError(t, err)
 	assert.Equal(t, app.Name, actual.Name)
 	assert.Equal(t, proj.ID, actual.ProjectID)
@@ -110,7 +110,7 @@ func TestLoadAllAsAdmin(t *testing.T) {
 	}
 	require.NoError(t, application.Insert(db, proj.ID, &app2))
 
-	actual, err := application.LoadAll(context.TODO(), db, proj.ID)
+	actual, err := application.LoadAllByProjectKey(context.TODO(), db, proj.Key)
 	require.NoError(t, err)
 	assert.Equal(t, 2, len(actual))
 
@@ -137,7 +137,7 @@ func TestLoadAllAsUser(t *testing.T) {
 
 	_, _ = assets.InsertLambdaUser(t, db, &proj.ProjectGroups[0].Group)
 
-	actual, err := application.LoadAll(context.TODO(), db, proj.ID)
+	actual, err := application.LoadAllByProjectKey(context.TODO(), db, proj.Key)
 	test.NoError(t, err)
 	assert.Equal(t, 2, len(actual))
 }

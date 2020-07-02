@@ -27,12 +27,7 @@ func (api *API) getApplicationExportHandler() service.Handler {
 			return err
 		}
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.Export(ctx, api.mustDB(), proj.ID, appName, project.EncryptWithBuiltinKey)
+		app, err := application.Export(ctx, api.mustDB(), projectKey, appName, project.EncryptWithBuiltinKey)
 		if err != nil {
 			return err
 		}

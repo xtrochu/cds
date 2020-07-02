@@ -48,7 +48,7 @@ func Test_postApplicationMetadataHandler_AsProvider(t *testing.T) {
 	})
 
 	require.NoError(t, sdkclient.ApplicationMetadataUpdate(pkey, app.Name, "b1", "b1"))
-	app, err = application.LoadByProjectIDAndName(context.TODO(), api.mustDB(), proj.ID, app.Name)
+	app, err = application.LoadByProjectKeyAndName(context.TODO(), api.mustDB(), proj.Key, app.Name)
 	require.NoError(t, err)
 	assert.Equal(t, "a1", app.Metadata["a1"])
 	assert.Equal(t, "b1", app.Metadata["b1"])

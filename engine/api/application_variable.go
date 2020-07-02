@@ -8,7 +8,6 @@ import (
 
 	"github.com/ovh/cds/engine/api/application"
 	"github.com/ovh/cds/engine/api/event"
-	"github.com/ovh/cds/engine/api/project"
 	"github.com/ovh/cds/engine/service"
 	"github.com/ovh/cds/sdk"
 )
@@ -35,14 +34,9 @@ func (api *API) getVariableAuditInApplicationHandler() service.Handler {
 		appName := vars["applicationName"]
 		varName := vars["name"]
 
-		proj, err := project.Load(api.mustDB(), projectKey)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName)
 		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load application %s on project %s", appName, proj.Key)
+			return sdk.WrapError(err, "cannot load application %s on project %s", appName, projectKey)
 		}
 
 		variable, err := application.LoadVariable(ctx, api.mustDB(), app.ID, varName)
@@ -66,12 +60,7 @@ func (api *API) getVariableInApplicationHandler() service.Handler {
 		appName := vars["applicationName"]
 		varName := vars["name"]
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application %s", appName)
 		}
@@ -91,12 +80,7 @@ func (api *API) getVariablesInApplicationHandler() service.Handler {
 		projectKey := vars[permProjectKey]
 		appName := vars["applicationName"]
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName, application.LoadOptions.WithVariables)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName, application.LoadOptions.WithVariables)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application %s", appName)
 		}
@@ -112,12 +96,7 @@ func (api *API) deleteVariableFromApplicationHandler() service.Handler {
 		appName := vars["applicationName"]
 		varName := vars["name"]
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application: %s", appName)
 		}
@@ -165,12 +144,7 @@ func (api *API) updateVariableInApplicationHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrWrongRequest)
 		}
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application: %s", appName)
 		}
@@ -219,12 +193,7 @@ func (api *API) addVariableInApplicationHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrWrongRequest)
 		}
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName)
 		if err != nil {
 			return sdk.WrapError(err, "Cannot load application %s ", appName)
 		}

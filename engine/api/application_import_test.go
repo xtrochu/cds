@@ -60,7 +60,7 @@ variables:
 	//Check result
 	t.Logf(">>%s", rec.Body.String())
 
-	app, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp", application.LoadOptions.WithVariables)
+	app, err := application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "myNewApp", application.LoadOptions.WithVariables)
 	require.NoError(t, err)
 
 	assert.NotNil(t, app)
@@ -162,11 +162,11 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecrets(t *testi
 	//Check result
 	t.Logf(">>%s", rec.Body.String())
 
-	app, err = application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
+	app, err = application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "myNewApp", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
 	require.NoError(t, err)
 
 	//Reload the application to check the keys
-	app1, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp-1", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
+	app1, err := application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "myNewApp-1", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
 	require.NoError(t, err)
 
 	assert.NotNil(t, app1)
@@ -270,11 +270,11 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	//Check result
 	t.Logf(">>%s", rec.Body.String())
 
-	app, err = application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
+	app, err = application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "myNewApp", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
 	require.NoError(t, err)
 
 	//Reload the application to check the keys
-	app1, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp-1", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
+	app1, err := application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "myNewApp-1", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
 	require.NoError(t, err)
 
 	assert.NotNil(t, app1)
@@ -324,11 +324,11 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	//Check result
 	t.Logf(">>%s", rec.Body.String())
 
-	app, err = application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
+	app, err = application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "myNewApp", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
 	require.NoError(t, err)
 
 	//Reload the application to check the keys
-	app1, err = application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp-1", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
+	app1, err = application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "myNewApp-1", application.LoadOptions.WithKeys, application.LoadOptions.WithVariablesWithClearPassword)
 	require.NoError(t, err)
 
 	assert.NotNil(t, app1)
@@ -408,7 +408,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 	}, u))
 
 	// check that keys secrets are well stored
-	app, err = application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp",
+	app, err = application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "myNewApp",
 		application.LoadOptions.WithClearKeys,
 		application.LoadOptions.WithVariablesWithClearPassword,
 	)
@@ -481,7 +481,7 @@ func Test_postApplicationImportHandler_NewAppFromYAMLWithKeysAndSecretsAndReImpo
 
 	t.Logf(">>%s", rec.Body.String())
 
-	app, err = application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp",
+	app, err = application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "myNewApp",
 		application.LoadOptions.WithClearKeys,
 		application.LoadOptions.WithVariablesWithClearPassword,
 	)
@@ -534,7 +534,7 @@ keys:
 	//Check result
 	t.Logf(">>%s", rec.Body.String())
 
-	app, err := application.LoadByProjectIDAndName(context.TODO(), db, proj.ID, "myNewApp", application.LoadOptions.WithKeys)
+	app, err := application.LoadByProjectKeyAndName(context.TODO(), db, proj.Key, "myNewApp", application.LoadOptions.WithKeys)
 	require.NoError(t, err)
 
 	assert.NotNil(t, app)
@@ -734,7 +734,7 @@ func Test_postApplicationImportHandler_ExistingAppWithDeploymentStrategy(t *test
 	//Check result
 	t.Logf(">>%s", rec.Body.String())
 
-	actualApp, err := application.LoadByProjectIDAndName(context.TODO(), api.mustDB(), proj.ID, app.Name, application.LoadOptions.WithClearDeploymentStrategies)
+	actualApp, err := application.LoadByProjectKeyAndName(context.TODO(), api.mustDB(), proj.Key, app.Name, application.LoadOptions.WithClearDeploymentStrategies)
 	require.NoError(t, err)
 	assert.Equal(t, "my-secret-token-2", actualApp.DeploymentStrategies[pfname]["token"].Value)
 	assert.Equal(t, "my-url-3", actualApp.DeploymentStrategies[pfname]["url"].Value)
@@ -836,7 +836,7 @@ func Test_postApplicationImportHandler_DontOverrideDeploymentPasswordIfNotGiven(
 
 	t.Logf(">>%s", rec.Body.String())
 
-	actualApp, err := application.LoadByProjectIDAndName(context.TODO(), api.mustDB(), proj.ID, app.Name, application.LoadOptions.WithClearDeploymentStrategies)
+	actualApp, err := application.LoadByProjectKeyAndName(context.TODO(), api.mustDB(), proj.Key, app.Name, application.LoadOptions.WithClearDeploymentStrategies)
 	require.NoError(t, err)
 	assert.Equal(t, "my-secret-token-2", actualApp.DeploymentStrategies[pfname]["token"].Value)
 	assert.Equal(t, "my-url-2", actualApp.DeploymentStrategies[pfname]["url"].Value)

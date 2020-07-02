@@ -87,7 +87,7 @@ func loadApplications(db gorp.SqlExecutor, proj *sdk.Project) error {
 }
 
 func loadApplicationNames(db gorp.SqlExecutor, proj *sdk.Project) error {
-	apps, err := application.LoadAllNames(db, proj.ID)
+	apps, err := application.LoadAllNames(db, proj.Key)
 	if err != nil {
 		return sdk.WithStack(err)
 	}
@@ -208,7 +208,7 @@ func loadWorkflowNames(db gorp.SqlExecutor, proj *sdk.Project) error {
 }
 
 func loadApplicationsWithOpts(db gorp.SqlExecutor, proj *sdk.Project, opts ...application.LoadOptionFunc) error {
-	apps, err := application.LoadAll(context.TODO(), db, proj.ID, opts...)
+	apps, err := application.LoadAllByProjectKey(context.TODO(), db, proj.Key, opts...)
 	if err != nil && sdk.Cause(err) != sql.ErrNoRows && !sdk.ErrorIs(err, sdk.ErrNotFound) {
 		return sdk.WithStack(err)
 	}

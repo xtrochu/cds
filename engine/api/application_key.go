@@ -10,7 +10,6 @@ import (
 	"github.com/ovh/cds/engine/api/application"
 	"github.com/ovh/cds/engine/api/event"
 	"github.com/ovh/cds/engine/api/keys"
-	"github.com/ovh/cds/engine/api/project"
 	"github.com/ovh/cds/engine/service"
 	"github.com/ovh/cds/sdk"
 )
@@ -21,12 +20,7 @@ func (api *API) getKeysInApplicationHandler() service.Handler {
 		projectKey := vars[permProjectKey]
 		appName := vars["applicationName"]
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName, application.LoadOptions.WithKeys)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName, application.LoadOptions.WithKeys)
 		if err != nil {
 			return err
 		}
@@ -42,12 +36,7 @@ func (api *API) deleteKeyInApplicationHandler() service.Handler {
 		appName := vars["applicationName"]
 		keyName := vars["name"]
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName, application.LoadOptions.WithKeys)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName, application.LoadOptions.WithKeys)
 		if err != nil {
 			return err
 		}
@@ -55,9 +44,9 @@ func (api *API) deleteKeyInApplicationHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrForbidden)
 		}
 
-		tx, errT := api.mustDB().Begin()
-		if errT != nil {
-			return sdk.WrapError(errT, "v> Cannot start transaction")
+		tx, err := api.mustDB().Begin()
+		if err != nil {
+			return sdk.WrapError(err, "cannot start transaction")
 		}
 		defer tx.Rollback() // nolint
 
@@ -66,7 +55,7 @@ func (api *API) deleteKeyInApplicationHandler() service.Handler {
 			if k.Name == keyName {
 				keyToDelete = k
 				if err := application.DeleteKey(tx, app.ID, keyName); err != nil {
-					return sdk.WrapError(err, "Cannot delete key %s", k.Name)
+					return sdk.WrapError(err, "cannot delete key %s", k.Name)
 				}
 			}
 		}
@@ -101,12 +90,7 @@ func (api *API) addKeyInApplicationHandler() service.Handler {
 			return sdk.WrapError(sdk.ErrInvalidKeyPattern, "addKeyInApplicationHandler: Key name %s do not respect pattern %s", newKey.Name, sdk.NamePattern)
 		}
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName)
 		if err != nil {
 			return err
 		}

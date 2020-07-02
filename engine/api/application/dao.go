@@ -39,7 +39,7 @@ func getAll(ctx context.Context, db gorp.SqlExecutor, query gorpmapping.Query, o
 			return nil, err
 		}
 		if !isValid {
-			log.Error(ctx, "application.loadApplications> application %d data corrupted", as[i].ID)
+			log.Error(ctx, "application.getAll> application %d data corrupted", as[i].ID)
 			continue
 		}
 		verifiedApplications = append(verifiedApplications, &as[i].Application)
@@ -115,36 +115,39 @@ func Exists(db gorp.SqlExecutor, projectKey, appName string) (bool, error) {
 	return count == 1, nil
 }
 
-// LoadAllByProjectIDAndRepository load all application where repository match given one.
-func LoadAllByProjectIDAndRepository(ctx context.Context, db gorp.SqlExecutor, projectID int64, repo string, opts ...LoadOptionFunc) ([]sdk.Application, error) {
+// LoadAllByProjectKeyAndRepository load all application where repository match given one.
+func LoadAllByProjectKeyAndRepository(ctx context.Context, db gorp.SqlExecutor, projectKey string, repo string, opts ...LoadOptionFunc) ([]sdk.Application, error) {
 	query := gorpmapping.NewQuery(`
-    SELECT *
+    SELECT application.*
     FROM application
-    WHERE project_id = $1
-    AND from_repository = $2
-  `).Args(projectID, repo)
+    JOIN project ON project.id = application.project_id
+    WHERE project.projectkey = $1
+    AND application.from_repository = $2
+  `).Args(projectKey, repo)
 	return getAll(ctx, db, query, opts...)
 }
 
-// LoadByProjectIDAndName load an application from DB.
-func LoadByProjectIDAndName(ctx context.Context, db gorp.SqlExecutor, projectID int64, name string, opts ...LoadOptionFunc) (*sdk.Application, error) {
+// LoadByProjectKeyAndName load an application from DB.
+func LoadByProjectKeyAndName(ctx context.Context, db gorp.SqlExecutor, projectKey string, name string, opts ...LoadOptionFunc) (*sdk.Application, error) {
 	query := gorpmapping.NewQuery(`
-		SELECT *
+    SELECT application.*
 		FROM application
-		WHERE project_id = $1
-    AND name = $2
-  `).Args(projectID, name)
+		JOIN project ON project.id = application.project_id
+		WHERE project.projectkey = $1
+		AND application.name = $2
+  `).Args(projectKey, name)
 	return get(ctx, db, query, opts...)
 }
 
-// LoadByProjectIDAndNameWithClearVCSStrategyPassword load an application from DB.
-func LoadByProjectIDAndNameWithClearVCSStrategyPassword(ctx context.Context, db gorp.SqlExecutor, projectID int64, name string, opts ...LoadOptionFunc) (*sdk.Application, error) {
+// LoadByProjectKeyAndNameWithClearVCSStrategyPassword load an application from DB.
+func LoadByProjectKeyAndNameWithClearVCSStrategyPassword(ctx context.Context, db gorp.SqlExecutor, projectKey string, name string, opts ...LoadOptionFunc) (*sdk.Application, error) {
 	query := gorpmapping.NewQuery(`
-		SELECT *
-		FROM application
-		WHERE project_id = $1
-    AND name = $2
-  `).Args(projectID, name)
+    SELECT application.*
+    FROM application
+    JOIN project ON project.id = application.project_id
+    WHERE project.projectkey = $1
+    AND application.name = $2
+  `).Args(projectKey, name)
 	return getWithClearVCSStrategyPassword(ctx, db, query, opts...)
 }
 
@@ -246,37 +249,41 @@ func Update(ctx context.Context, db gorp.SqlExecutor, app *sdk.Application) erro
 	return nil
 }
 
-// LoadAll returns all applications.
-func LoadAll(ctx context.Context, db gorp.SqlExecutor, projectID int64, opts ...LoadOptionFunc) ([]sdk.Application, error) {
+// LoadAllByProjectKey returns all applications.
+func LoadAllByProjectKey(ctx context.Context, db gorp.SqlExecutor, projectKey string, opts ...LoadOptionFunc) ([]sdk.Application, error) {
 	query := gorpmapping.NewQuery(`
-    SELECT *
+    SELECT application.*
     FROM application
-    WHERE project_id = $1
+		JOIN project ON project.id = application.project_id
+		WHERE project.projectkey = $1
     ORDER BY name ASC
-  `).Args(projectID)
+  `).Args(projectKey)
 	return getAll(ctx, db, query, opts...)
 }
 
 // LoadAllByIDs returns all applications
 func LoadAllByIDs(ctx context.Context, db gorp.SqlExecutor, ids []int64, opts ...LoadOptionFunc) ([]sdk.Application, error) {
 	query := gorpmapping.NewQuery(`
-	SELECT application.*
-	FROM application
-	WHERE application.id = ANY($1)
-	ORDER BY application.name ASC`).Args(pq.Int64Array(ids))
+    SELECT application.*
+    FROM application
+    WHERE application.id = ANY($1)
+    ORDER BY application.name ASC
+  `).Args(pq.Int64Array(ids))
 	return getAll(ctx, db, query, opts...)
 }
 
 // LoadAllNames returns all application names
-func LoadAllNames(db gorp.SqlExecutor, projectID int64) (sdk.IDNames, error) {
+func LoadAllNames(db gorp.SqlExecutor, projectKey string) (sdk.IDNames, error) {
 	query := `
 		SELECT application.id, application.name, application.description, application.icon
-		FROM application
-		WHERE application.project_id= $1
-		ORDER BY application.name ASC`
+    FROM application
+		JOIN project ON project.id = application.project_id
+		WHERE project.projectkey = $1
+    ORDER BY application.name ASC
+  `
 
 	var res sdk.IDNames
-	if _, err := db.Select(&res, query, projectID); err != nil {
+	if _, err := db.Select(&res, query, projectKey); err != nil {
 		if err == sql.ErrNoRows {
 			return res, nil
 		}

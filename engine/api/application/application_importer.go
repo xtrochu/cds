@@ -27,7 +27,7 @@ func Import(ctx context.Context, db gorp.SqlExecutor, proj sdk.Project, app *sdk
 	}
 
 	if doUpdate {
-		oldApp, err := LoadByProjectIDAndName(ctx, db, proj.ID, app.Name,
+		oldApp, err := LoadByProjectKeyAndName(ctx, db, proj.Key, app.Name,
 			LoadOptions.WithKeys,
 			LoadOptions.WithVariablesWithClearPassword,
 			LoadOptions.WithClearDeploymentStrategies,

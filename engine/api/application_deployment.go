@@ -20,12 +20,7 @@ func (api *API) getApplicationDeploymentStrategiesConfigHandler() service.Handle
 		projectKey := vars[permProjectKey]
 		appName := vars["applicationName"]
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName,
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName,
 			application.LoadOptions.WithDeploymentStrategies)
 		if err != nil {
 			return err
@@ -74,7 +69,7 @@ func (api *API) postApplicationDeploymentStrategyConfigHandler() service.Handler
 			return sdk.WrapError(sdk.ErrForbidden, "postApplicationDeploymentStrategyConfigHandler> integration doesn't support deployment")
 		}
 
-		app, err := application.LoadByProjectIDAndName(ctx, tx, proj.ID, appName,
+		app, err := application.LoadByProjectKeyAndName(ctx, tx, proj.Key, appName,
 			application.LoadOptions.WithClearDeploymentStrategies)
 		if err != nil {
 			return sdk.WrapError(err, "unable to load application")
@@ -94,10 +89,10 @@ func (api *API) postApplicationDeploymentStrategyConfigHandler() service.Handler
 		oldPfConfig.MergeWith(pfConfig)
 
 		if err := application.SetDeploymentStrategy(tx, proj.ID, app.ID, pf.Model.ID, pfName, oldPfConfig); err != nil {
-			return sdk.WithStack(err)
+			return err
 		}
 
-		app, err = application.LoadByProjectIDAndName(ctx, tx, proj.ID, appName,
+		app, err = application.LoadByProjectKeyAndName(ctx, tx, proj.Key, appName,
 			application.LoadOptions.WithDeploymentStrategies)
 		if err != nil {
 			return sdk.WrapError(err, "unable to load application")
@@ -145,7 +140,7 @@ func (api *API) deleteApplicationDeploymentStrategyConfigHandler() service.Handl
 			return sdk.WrapError(sdk.ErrForbidden, "integration doesn't support deployment")
 		}
 
-		app, err := application.LoadByProjectIDAndName(ctx, tx, proj.ID, appName,
+		app, err := application.LoadByProjectKeyAndName(ctx, tx, proj.Key, appName,
 			application.LoadOptions.WithDeploymentStrategies)
 		if err != nil {
 			return sdk.WrapError(err, "unable to load application")
@@ -195,12 +190,7 @@ func (api *API) getApplicationDeploymentStrategyConfigHandler() service.Handler 
 			opts = []application.LoadOptionFunc{application.LoadOptions.WithClearDeploymentStrategies}
 		}
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName, opts...)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName, opts...)
 		if err != nil {
 			return err
 		}

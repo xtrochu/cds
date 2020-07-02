@@ -58,13 +58,8 @@ func (api *API) getVariablesHandler() service.Handler {
 		// Load app
 		appVar := []string{}
 		if appName != "" {
-			proj, err := project.Load(api.mustDB(), projectKey)
-			if err != nil {
-				return sdk.WrapError(err, "cannot load project %s", projectKey)
-			}
-
 			// Check permission on application
-			app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, appName, application.LoadOptions.WithVariables)
+			app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, appName, application.LoadOptions.WithVariables)
 			if err != nil {
 				return sdk.WrapError(err, "cannot Load application")
 			}

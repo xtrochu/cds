@@ -66,12 +66,7 @@ func (api *API) getApplicationsHandler() service.Handler {
 			}
 		}
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return err
-		}
-
-		applications, err := application.LoadAll(ctx, api.mustDB(), proj.ID, loadOpts...)
+		applications, err := application.LoadAllByProjectKey(ctx, api.mustDB(), projectKey, loadOpts...)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load applications from db")
 		}
@@ -139,12 +134,7 @@ func (api *API) getApplicationHandler() service.Handler {
 			loadOptions = append(loadOptions, application.LoadOptions.WithIcon)
 		}
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return err
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, applicationName, loadOptions...)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, applicationName, loadOptions...)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application %s for project %s from db", applicationName, projectKey)
 		}
@@ -181,12 +171,7 @@ func (api *API) getApplicationVCSInfosHandler() service.Handler {
 		applicationName := vars["applicationName"]
 		remote := r.FormValue("remote")
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s from db", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, applicationName, application.LoadOptions.Default)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, applicationName, application.LoadOptions.Default)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application %s for project %s from db", applicationName, projectKey)
 		}
@@ -286,12 +271,7 @@ func (api *API) deleteApplicationHandler() service.Handler {
 		projectKey := vars[permProjectKey]
 		applicationName := vars["applicationName"]
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return err
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, applicationName)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, applicationName)
 		if err != nil {
 			return err
 		}
@@ -311,7 +291,7 @@ func (api *API) deleteApplicationHandler() service.Handler {
 			return sdk.WithStack(err)
 		}
 
-		event.PublishDeleteApplication(ctx, proj.Key, *app, getAPIConsumer(ctx))
+		event.PublishDeleteApplication(ctx, projectKey, *app, getAPIConsumer(ctx))
 
 		return nil
 	}
@@ -339,7 +319,7 @@ func (api *API) cloneApplicationHandler() service.Handler {
 			return err
 		}
 
-		appToClone, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, applicationName, application.LoadOptions.Default)
+		appToClone, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), proj.Key, applicationName, application.LoadOptions.Default)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application %s", applicationName)
 		}
@@ -408,12 +388,7 @@ func (api *API) updateApplicationHandler() service.Handler {
 		projectKey := vars[permProjectKey]
 		applicationName := vars["applicationName"]
 
-		proj, err := project.Load(api.mustDB(), projectKey, project.LoadOptions.Default)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndNameWithClearVCSStrategyPassword(ctx, api.mustDB(), proj.ID, applicationName, application.LoadOptions.Default)
+		app, err := application.LoadByProjectKeyAndNameWithClearVCSStrategyPassword(ctx, api.mustDB(), projectKey, applicationName, application.LoadOptions.Default)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application %s", applicationName)
 		}
@@ -463,7 +438,7 @@ func (api *API) updateApplicationHandler() service.Handler {
 			return sdk.WithStack(err)
 		}
 
-		event.PublishUpdateApplication(ctx, proj.Key, *app, old, getAPIConsumer(ctx))
+		event.PublishUpdateApplication(ctx, projectKey, *app, old, getAPIConsumer(ctx))
 
 		return service.WriteJSON(w, app, http.StatusOK)
 	}
@@ -475,12 +450,7 @@ func (api *API) postApplicationMetadataHandler() service.Handler {
 		projectKey := vars[permProjectKey]
 		applicationName := vars["applicationName"]
 
-		proj, err := project.Load(api.mustDB(), projectKey)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project %s", projectKey)
-		}
-
-		app, err := application.LoadByProjectIDAndName(ctx, api.mustDB(), proj.ID, applicationName)
+		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, applicationName)
 		if err != nil {
 			return err
 		}
