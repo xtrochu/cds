@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ovh/cds/engine/api/feature"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
 	"github.com/ovh/cds/engine/api/services"
 	"github.com/ovh/cds/engine/api/test"
@@ -70,8 +69,8 @@ func Test_postImportAsCodeHandler(t *testing.T) {
 
 	assert.NoError(t, repositoriesmanager.InsertProjectVCSServerLink(context.TODO(), db, &vcsServer))
 
-	a, _ := assets.InsertService(t, db, "Test_postImportAsCodeHandler", services.TypeRepositories)
-	b, _ := assets.InsertService(t, db, "Test_VCSService", services.TypeVCS)
+	a, _ := assets.InsertService(t, db, "Test_postImportAsCodeHandler", sdk.TypeRepositories)
+	b, _ := assets.InsertService(t, db, "Test_VCSService", sdk.TypeVCS)
 
 	defer func() {
 		_ = services.Delete(db, a)
@@ -136,75 +135,12 @@ func Test_postImportAsCodeHandler(t *testing.T) {
 	assert.NotEmpty(t, myOpe.UUID)
 }
 
-func Test_getImportAsCodeHandler(t *testing.T) {
-	api, db, _ := newTestAPI(t)
-
-	p := assets.InsertTestProject(t, db, api.Cache, sdk.RandomString(10), sdk.RandomString(10))
-	u, pass := assets.InsertAdminUser(t, db)
-
-	a, _ := assets.InsertService(t, db, "Test_getImportAsCodeHandler", services.TypeRepositories)
-	defer func() {
-		_ = services.Delete(db, a)
-	}()
-
-	UUID := sdk.UUID()
-
-	feature.SetClient(nil)
-
-	//This is a mock for the repositories service
-	services.HTTPClient = mock(
-		func(r *http.Request) (*http.Response, error) {
-			body := new(bytes.Buffer)
-			w := new(http.Response)
-			enc := json.NewEncoder(body)
-			w.Body = ioutil.NopCloser(body)
-
-			ope := new(sdk.Operation)
-			ope.URL = "https://github.com/fsamin/go-repo.git"
-			ope.UUID = UUID
-			ope.Status = sdk.OperationStatusDone
-			ope.LoadFiles.Pattern = workflow.WorkflowAsCodePattern
-			ope.LoadFiles.Results = map[string][]byte{
-				"w-go-repo.yml": []byte(`name: w-go-repo
-					version: v1.0
-					pipeline: build
-					application: go-repo
-					pipeline_hooks:
-					- type: RepositoryWebHook
-					`),
-			}
-			if err := enc.Encode(ope); err != nil {
-				return writeError(w, err)
-			}
-
-			w.StatusCode = http.StatusOK
-			return w, nil
-		},
-	)
-
-	uri := api.Router.GetRoute("GET", api.getImportAsCodeHandler, map[string]string{
-		"permProjectKey": p.Key,
-		"uuid":           UUID,
-	})
-	req, err := http.NewRequest("GET", uri, nil)
-	test.NoError(t, err)
-	assets.AuthentifyRequest(t, req, u, pass)
-
-	// Do the request
-	w := httptest.NewRecorder()
-	api.Router.Mux.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
-	myOpe := new(sdk.Operation)
-	test.NoError(t, json.Unmarshal(w.Body.Bytes(), myOpe))
-	assert.NotEmpty(t, myOpe.UUID)
-}
-
 func Test_postPerformImportAsCodeHandler(t *testing.T) {
 	api, db, _ := newTestAPI(t)
 
 	u, pass := assets.InsertAdminUser(t, db)
 
-	assert.NoError(t, workflow.CreateBuiltinWorkflowHookModels(db))
+	assert.NoError(t, workflow.CreateBuiltinWorkflowHookModels(api.mustDB()))
 
 	//Insert Project
 	pkey := sdk.RandomString(10)
@@ -217,9 +153,9 @@ func Test_postPerformImportAsCodeHandler(t *testing.T) {
 	vcsServer.Set("secret", "bar")
 	assert.NoError(t, repositoriesmanager.InsertProjectVCSServerLink(context.TODO(), db, &vcsServer))
 
-	a, _ := assets.InsertService(t, db, "Test_postPerformImportAsCodeHandler_Repo", services.TypeRepositories)
-	b, _ := assets.InsertService(t, db, "Test_postPerformImportAsCodeHandler_VCS", services.TypeVCS)
-	c, _ := assets.InsertService(t, db, "Test_postPerformImportAsCodeHandler_Hooks", services.TypeHooks)
+	a, _ := assets.InsertService(t, db, "Test_postPerformImportAsCodeHandler_Repo", sdk.TypeRepositories)
+	b, _ := assets.InsertService(t, db, "Test_postPerformImportAsCodeHandler_VCS", sdk.TypeVCS)
+	c, _ := assets.InsertService(t, db, "Test_postPerformImportAsCodeHandler_Hooks", sdk.TypeHooks)
 
 	defer func() {
 		_ = services.Delete(db, a)
@@ -369,7 +305,7 @@ vcs_ssh_key: proj-blabla
 `
 	var eapp = new(exportentities.Application)
 	assert.NoError(t, yaml.Unmarshal([]byte(appS), eapp))
-	app, _, globalError := application.ParseAndImport(context.Background(), db, api.Cache, *p, eapp, application.ImportOptions{Force: true}, nil, u)
+	app, _, _, globalError := application.ParseAndImport(context.Background(), db, api.Cache, *p, eapp, application.ImportOptions{Force: true}, nil, u)
 	assert.NoError(t, globalError)
 
 	app.FromRepository = repoURL
@@ -412,7 +348,7 @@ vcs_ssh_key: proj-blabla
 	}
 
 	// Prepare VCS Mock
-	mockVCSSservice, _ := assets.InsertService(t, db, "Test_postResyncPRAsCodeHandler", services.TypeVCS)
+	mockVCSSservice, _ := assets.InsertService(t, db, "Test_postResyncPRAsCodeHandler", sdk.TypeVCS)
 	defer func() {
 		_ = services.Delete(db, mockVCSSservice) // nolint
 	}()

@@ -418,9 +418,19 @@ func (api *API) postTemplateApplyHandler() service.Handler {
 						return sdk.NewErrorFrom(sdk.ErrWrongRequest, "missing branch or message data")
 					}
 
-					ope, err := operation.PushOperationUpdate(ctx, api.mustDB(), api.Cache, *p, data, rootApp.VCSServer, rootApp.RepositoryFullname, branch, message, rootApp.RepositoryStrategy, consumer)
+					tx, err := api.mustDB().Begin()
+					if err != nil {
+						return sdk.WithStack(err)
+					}
+					defer tx.Rollback() // nolint
+
+					ope, err := operation.PushOperationUpdate(ctx, tx, api.Cache, *p, data, rootApp.VCSServer, rootApp.RepositoryFullname, branch, message, rootApp.RepositoryStrategy, consumer)
 					if err != nil {
 						return err
+					}
+
+					if err := tx.Commit(); err != nil {
+						return sdk.WithStack(err)
 					}
 
 					sdk.GoRoutine(context.Background(), fmt.Sprintf("UpdateAsCodeResult-%s", ope.UUID), func(ctx context.Context) {
@@ -431,13 +441,13 @@ func (api *API) postTemplateApplyHandler() service.Handler {
 							FromRepo:      existingWorkflow.FromRepository,
 							OperationUUID: ope.UUID,
 						}
-						asCodeEvent := ascode.UpdateAsCodeResult(ctx, api.mustDB(), api.Cache, *p, existingWorkflow.ID, *rootApp, ed, consumer)
-						if asCodeEvent != nil {
-							event.PublishAsCodeEvent(ctx, p.Key, *asCodeEvent, consumer)
-						}
+						ascode.UpdateAsCodeResult(ctx, api.mustDB(), api.Cache, *p, *existingWorkflow, *rootApp, ed, consumer)
 					}, api.PanicDump())
 
-					return service.WriteJSON(w, ope, http.StatusOK)
+					return service.WriteJSON(w, sdk.Operation{
+						UUID:   ope.UUID,
+						Status: ope.Status,
+					}, http.StatusOK)
 				}
 			}
 		}
@@ -448,7 +458,7 @@ func (api *API) postTemplateApplyHandler() service.Handler {
 		if req.Detached {
 			mods = append(mods, workflowtemplate.TemplateRequestModifiers.Detached)
 		}
-		_, wti, err := workflowtemplate.CheckAndExecuteTemplate(ctx, api.mustDB(), *consumer, *p, &data, mods...)
+		_, wti, err := workflowtemplate.CheckAndExecuteTemplate(ctx, api.mustDB(), api.Cache, *consumer, *p, &data, mods...)
 		if err != nil {
 			return err
 		}
@@ -463,7 +473,7 @@ func (api *API) postTemplateApplyHandler() service.Handler {
 			return service.Write(w, buf.Bytes(), http.StatusOK, "application/tar")
 		}
 
-		msgs, wkf, oldWkf, err := workflow.Push(ctx, api.mustDB(), api.Cache, p, data, nil, consumer, project.DecryptWithBuiltinKey)
+		msgs, wkf, oldWkf, _, err := workflow.Push(ctx, api.mustDB(), api.Cache, p, data, nil, consumer, project.DecryptWithBuiltinKey)
 		if err != nil {
 			return sdk.WrapError(err, "cannot push generated workflow")
 		}
@@ -657,8 +667,25 @@ func (api *API) postTemplateBulkHandler() service.Handler {
 								continue
 							}
 
-							ope, err := operation.PushOperationUpdate(ctx, api.mustDB(), api.Cache, *p, data, rootApp.VCSServer, rootApp.RepositoryFullname, branch, message, rootApp.RepositoryStrategy, consumer)
+							tx, err := api.mustDB().Begin()
 							if err != nil {
+								if errD := errorDefer(err); errD != nil {
+									log.Error(ctx, "%v", errD)
+									return
+								}
+								continue
+							}
+							ope, err := operation.PushOperationUpdate(ctx, tx, api.Cache, *p, data, rootApp.VCSServer, rootApp.RepositoryFullname, branch, message, rootApp.RepositoryStrategy, consumer)
+							if err != nil {
+								tx.Rollback() // nolint
+								if errD := errorDefer(err); errD != nil {
+									log.Error(ctx, "%v", errD)
+									return
+								}
+								continue
+							}
+							if err := tx.Commit(); err != nil {
+								tx.Rollback() // nolint
 								if errD := errorDefer(err); errD != nil {
 									log.Error(ctx, "%v", errD)
 									return
@@ -673,10 +700,7 @@ func (api *API) postTemplateBulkHandler() service.Handler {
 								FromRepo:      existingWorkflow.FromRepository,
 								OperationUUID: ope.UUID,
 							}
-							asCodeEvent := ascode.UpdateAsCodeResult(ctx, api.mustDB(), api.Cache, *p, existingWorkflow.ID, *rootApp, ed, consumer)
-							if asCodeEvent != nil {
-								event.PublishAsCodeEvent(ctx, p.Key, *asCodeEvent, consumer)
-							}
+							ascode.UpdateAsCodeResult(ctx, api.mustDB(), api.Cache, *p, *existingWorkflow, *rootApp, ed, consumer)
 
 							bulk.Operations[i].Status = sdk.OperationStatusDone
 							if err := workflowtemplate.UpdateBulk(api.mustDB(), &bulk); err != nil {
@@ -691,7 +715,7 @@ func (api *API) postTemplateBulkHandler() service.Handler {
 					mods := []workflowtemplate.TemplateRequestModifierFunc{
 						workflowtemplate.TemplateRequestModifiers.DefaultKeys(*p),
 					}
-					_, wti, err = workflowtemplate.CheckAndExecuteTemplate(ctx, api.mustDB(), *consumer, *p, &data, mods...)
+					_, wti, err = workflowtemplate.CheckAndExecuteTemplate(ctx, api.mustDB(), api.Cache, *consumer, *p, &data, mods...)
 					if err != nil {
 						if errD := errorDefer(err); errD != nil {
 							log.Error(ctx, "%v", errD)
@@ -700,7 +724,7 @@ func (api *API) postTemplateBulkHandler() service.Handler {
 						continue
 					}
 
-					_, wkf, _, err := workflow.Push(ctx, api.mustDB(), api.Cache, p, data, nil, consumer, project.DecryptWithBuiltinKey)
+					_, wkf, _, _, err := workflow.Push(ctx, api.mustDB(), api.Cache, p, data, nil, consumer, project.DecryptWithBuiltinKey)
 					if err != nil {
 						if errD := errorDefer(sdk.WrapError(err, "cannot push generated workflow")); errD != nil {
 							log.Error(ctx, "%v", errD)

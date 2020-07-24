@@ -21,7 +21,7 @@ import (
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/cdsclient"
 	"github.com/ovh/cds/sdk/log"
-	"github.com/ovh/cds/sdk/tracingutils"
+	"github.com/ovh/cds/sdk/telemetry"
 )
 
 // MultiPartData represents the data to send
@@ -63,6 +63,12 @@ func (s *defaultServiceClient) DoMultiPartRequest(ctx context.Context, method, p
 
 // doMultiPartRequest performs an http request on a service with multipart  tar file + json field
 func doMultiPartRequest(ctx context.Context, db gorp.SqlExecutor, srvs []sdk.Service, method, path string, multiPartData *MultiPartData, in interface{}, out interface{}, mods ...cdsclient.RequestModifier) (int, error) {
+	ctx, end := telemetry.Span(ctx, "services.doMultiPartRequest",
+		telemetry.Tag("http.method", method),
+		telemetry.Tag("http.path", path),
+	)
+	defer end()
+
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -124,6 +130,12 @@ func doMultiPartRequest(ctx context.Context, db gorp.SqlExecutor, srvs []sdk.Ser
 }
 
 func (s *defaultServiceClient) DoJSONRequest(ctx context.Context, method, path string, in interface{}, out interface{}, mods ...cdsclient.RequestModifier) (http.Header, int, error) {
+	ctx, end := telemetry.Span(ctx, "services.DoJSONRequest",
+		telemetry.Tag("http.method", method),
+		telemetry.Tag("http.path", path),
+	)
+	defer end()
+
 	return doJSONRequest(ctx, s.db, s.srvs, method, path, in, out, mods...)
 }
 
@@ -279,9 +291,9 @@ func doRequestFromURL(ctx context.Context, db gorp.SqlExecutor, method string, c
 
 	req = req.WithContext(ctx)
 
-	spanCtx, ok := tracingutils.ContextToSpanContext(ctx)
+	spanCtx, ok := telemetry.ContextToSpanContext(ctx)
 	if ok {
-		tracingutils.DefaultFormat.SpanContextToRequest(spanCtx, req)
+		telemetry.DefaultFormat.SpanContextToRequest(spanCtx, req)
 	}
 
 	req.Header.Set("Connection", "close")

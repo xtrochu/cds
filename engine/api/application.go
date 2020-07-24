@@ -27,6 +27,7 @@ import (
 	"github.com/ovh/cds/engine/service"
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/exportentities"
+	"github.com/ovh/cds/sdk/gorpmapping"
 )
 
 func (api *API) getApplicationsHandler() service.Handler {
@@ -198,7 +199,13 @@ func (api *API) getApplicationVCSInfosHandler() service.Handler {
 		applicationName := vars["applicationName"]
 		remote := r.FormValue("remote")
 
-		app, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), projectKey, applicationName, application.LoadOptions.Default)
+		tx, err := api.mustDB().Begin()
+		if err != nil {
+			return sdk.WithStack(err)
+		}
+		defer tx.Rollback() // nolint
+
+		app, err := application.LoadByProjectKeyAndName(ctx, tx, projectKey, applicationName, application.LoadOptions.Default)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application %s for project %s from db", applicationName, projectKey)
 		}
@@ -213,14 +220,18 @@ func (api *API) getApplicationVCSInfosHandler() service.Handler {
 			return service.WriteJSON(w, resp, http.StatusOK)
 		}
 
-		vcsServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, api.mustDB(), projectKey, app.VCSServer)
+		vcsServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, tx, projectKey, app.VCSServer)
 		if err != nil {
 			return sdk.NewErrorWithStack(err, sdk.NewErrorFrom(sdk.ErrNoReposManagerClientAuth, "cannot get vcs server %s for project %s", app.VCSServer, projectKey))
 		}
 
-		client, err := repositoriesmanager.AuthorizedClient(ctx, api.mustDB(), api.Cache, projectKey, vcsServer)
+		client, err := repositoriesmanager.AuthorizedClient(ctx, tx, api.Cache, projectKey, vcsServer)
 		if err != nil {
 			return sdk.NewErrorWithStack(err, sdk.NewErrorFrom(sdk.ErrNoReposManagerClientAuth, "cannot get vcs server %s for project %s", app.VCSServer, projectKey))
+		}
+
+		if err := tx.Commit(); err != nil {
+			return sdk.WithStack(err)
 		}
 
 		repositoryFullname := app.RepositoryFullname
@@ -370,7 +381,7 @@ func (api *API) cloneApplicationHandler() service.Handler {
 }
 
 // cloneApplication Clone an application with all her dependencies: pipelines, permissions, triggers
-func cloneApplication(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, newApp *sdk.Application, appToClone *sdk.Application) error {
+func cloneApplication(ctx context.Context, db gorpmapping.SqlExecutorWithTx, store cache.Store, proj sdk.Project, newApp *sdk.Application, appToClone *sdk.Application) error {
 	// Create Application
 	if err := application.Insert(db, proj.ID, newApp); err != nil {
 		return err
@@ -433,12 +444,18 @@ func (api *API) updateAsCodeApplicationHandler() service.Handler {
 			return sdk.WrapError(sdk.ErrInvalidApplicationPattern, "Application name %s do not respect pattern", a.Name)
 		}
 
-		proj, err := project.Load(ctx, api.mustDB(), projectKey, project.LoadOptions.WithClearKeys)
+		tx, err := api.mustDB().Begin()
+		if err != nil {
+			return sdk.WithStack(err)
+		}
+		defer tx.Rollback() // nolint
+
+		proj, err := project.Load(ctx, tx, projectKey, project.LoadOptions.WithClearKeys)
 		if err != nil {
 			return err
 		}
 
-		appDB, err := application.LoadByProjectKeyAndName(ctx, api.mustDB(), proj.Key, name)
+		appDB, err := application.LoadByProjectKeyAndName(ctx, tx, proj.Key, name)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load application %s", name)
 		}
@@ -447,7 +464,7 @@ func (api *API) updateAsCodeApplicationHandler() service.Handler {
 			return sdk.NewErrorFrom(sdk.ErrForbidden, "current application is not ascode")
 		}
 
-		wkHolder, err := workflow.LoadByRepo(ctx, api.mustDB(), *proj, appDB.FromRepository, workflow.LoadOptions{
+		wkHolder, err := workflow.LoadByRepo(ctx, tx, *proj, appDB.FromRepository, workflow.LoadOptions{
 			WithTemplate: true,
 		})
 		if err != nil {
@@ -459,7 +476,7 @@ func (api *API) updateAsCodeApplicationHandler() service.Handler {
 
 		var rootApp *sdk.Application
 		if wkHolder.WorkflowData.Node.Context != nil && wkHolder.WorkflowData.Node.Context.ApplicationID != 0 {
-			rootApp, err = application.LoadByIDWithClearVCSStrategyPassword(ctx, api.mustDB(), wkHolder.WorkflowData.Node.Context.ApplicationID)
+			rootApp, err = application.LoadByIDWithClearVCSStrategyPassword(ctx, tx, wkHolder.WorkflowData.Node.Context.ApplicationID)
 			if err != nil {
 				return err
 			}
@@ -482,7 +499,7 @@ func (api *API) updateAsCodeApplicationHandler() service.Handler {
 
 		u := getAPIConsumer(ctx)
 		a.ProjectID = proj.ID
-		app, err := application.ExportApplication(api.mustDB(), a, project.EncryptWithBuiltinKey, fmt.Sprintf("app:%d:%s", appDB.ID, branch))
+		app, err := application.ExportApplication(tx, a, project.EncryptWithBuiltinKey, fmt.Sprintf("app:%d:%s", appDB.ID, branch))
 		if err != nil {
 			return sdk.WrapError(err, "unable to export app %s", a.Name)
 		}
@@ -490,9 +507,13 @@ func (api *API) updateAsCodeApplicationHandler() service.Handler {
 			Applications: []exportentities.Application{app},
 		}
 
-		ope, err := operation.PushOperationUpdate(ctx, api.mustDB(), api.Cache, *proj, wp, rootApp.VCSServer, rootApp.RepositoryFullname, branch, message, rootApp.RepositoryStrategy, u)
+		ope, err := operation.PushOperationUpdate(ctx, tx, api.Cache, *proj, wp, rootApp.VCSServer, rootApp.RepositoryFullname, branch, message, rootApp.RepositoryStrategy, u)
 		if err != nil {
 			return err
+		}
+
+		if err := tx.Commit(); err != nil {
+			return sdk.WithStack(err)
 		}
 
 		sdk.GoRoutine(context.Background(), fmt.Sprintf("UpdateAsCodeApplicationHandler-%s", ope.UUID), func(ctx context.Context) {
@@ -503,13 +524,13 @@ func (api *API) updateAsCodeApplicationHandler() service.Handler {
 				Name:          appDB.Name,
 				OperationUUID: ope.UUID,
 			}
-			asCodeEvent := ascode.UpdateAsCodeResult(ctx, api.mustDB(), api.Cache, *proj, wkHolder.ID, *rootApp, ed, u)
-			if asCodeEvent != nil {
-				event.PublishAsCodeEvent(ctx, proj.Key, *asCodeEvent, u)
-			}
+			ascode.UpdateAsCodeResult(ctx, api.mustDB(), api.Cache, *proj, *wkHolder, *rootApp, ed, u)
 		}, api.PanicDump())
 
-		return service.WriteJSON(w, ope, http.StatusOK)
+		return service.WriteJSON(w, sdk.Operation{
+			UUID:   ope.UUID,
+			Status: ope.Status,
+		}, http.StatusOK)
 	}
 }
 

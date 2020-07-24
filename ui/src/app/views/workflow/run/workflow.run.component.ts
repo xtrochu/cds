@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
@@ -23,7 +23,7 @@ import { ErrorMessageMap, WarningMessageMap } from './errors';
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 @AutoUnsubscribe()
-export class WorkflowRunComponent implements OnInit {
+export class WorkflowRunComponent implements OnInit, OnDestroy {
 
     project: Project;
 
@@ -38,9 +38,6 @@ export class WorkflowRunComponent implements OnInit {
 
     pipelineStatusEnum = PipelineStatus;
     notificationSubscription: Subscription;
-    dataSubs: Subscription;
-    paramsSubs: Subscription;
-    loadingRun = true;
     warningsMap = WarningMessageMap;
     errorsMap = ErrorMessageMap;
     warnings: Array<SpawnInfo>;
@@ -124,10 +121,14 @@ export class WorkflowRunComponent implements OnInit {
             this.workflowRunData['infos'] = wr.infos;
             this.workflowRunData['num'] = wr.num;
             this.workflowRunData['status'] = wr.status;
+            this.workflowRunData['read_only'] = wr.read_only;
+
             this.updateTitle(wr);
             this._cd.markForCheck();
         });
     }
+
+    ngOnDestroy(): void {} // Should be set to use @AutoUnsubscribe with AOT
 
     ngOnInit(): void {
         this.direction = this._workflowStore.getDirection(this.project.key, this.workflowName);

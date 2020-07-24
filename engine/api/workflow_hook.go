@@ -7,12 +7,12 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/ovh/cds/engine/api/observability"
 	"github.com/ovh/cds/engine/api/project"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
 	"github.com/ovh/cds/engine/api/workflow"
 	"github.com/ovh/cds/engine/service"
 	"github.com/ovh/cds/sdk"
+	"github.com/ovh/cds/sdk/telemetry"
 )
 
 func (api *API) getWorkflowHooksHandler() service.Handler {
@@ -52,12 +52,18 @@ func (api *API) getWorkflowHookModelsHandler() service.Handler {
 			return err
 		}
 
-		p, err := project.Load(ctx, api.mustDB(), key, project.LoadOptions.WithIntegrations)
+		tx, err := api.mustDB().Begin()
+		if err != nil {
+			return sdk.WithStack(err)
+		}
+		defer tx.Rollback() // nolint
+
+		p, err := project.Load(ctx, tx, key, project.LoadOptions.WithIntegrations)
 		if err != nil {
 			return sdk.WithStack(err)
 		}
 
-		wf, err := workflow.Load(ctx, api.mustDB(), api.Cache, *p, workflowName, workflow.LoadOptions{})
+		wf, err := workflow.Load(ctx, tx, api.Cache, *p, workflowName, workflow.LoadOptions{})
 		if err != nil {
 			return sdk.WithStack(err)
 		}
@@ -67,7 +73,7 @@ func (api *API) getWorkflowHookModelsHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrWorkflowNodeNotFound)
 		}
 
-		m, err := workflow.LoadHookModels(api.mustDB())
+		m, err := workflow.LoadHookModels(tx)
 		if err != nil {
 			return sdk.WithStack(err)
 		}
@@ -83,7 +89,7 @@ func (api *API) getWorkflowHookModelsHandler() service.Handler {
 			// Call VCS to know if repository allows webhook and get the configuration fields
 			vcsServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, api.mustDB(), p.Key, wf.GetApplication(node.Context.ApplicationID).VCSServer)
 			if err == nil {
-				client, err := repositoriesmanager.AuthorizedClient(ctx, api.mustDB(), api.Cache, p.Key, vcsServer)
+				client, err := repositoriesmanager.AuthorizedClient(ctx, tx, api.Cache, p.Key, vcsServer)
 				if err != nil {
 					return sdk.WrapError(err, "cannot get vcs client")
 				}
@@ -148,6 +154,10 @@ func (api *API) getWorkflowHookModelsHandler() service.Handler {
 			default:
 				models = append(models, m[i])
 			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return sdk.WithStack(err)
 		}
 
 		return service.WriteJSON(w, models, http.StatusOK)
@@ -240,10 +250,9 @@ func (api *API) postWorkflowJobHookCallbackHandler() service.Handler {
 
 		defer tx.Rollback() // nolint
 
-		_, next := observability.Span(ctx, "project.Load")
+		_, next := telemetry.Span(ctx, "project.Load")
 		proj, err := project.Load(ctx, tx, key,
 			project.LoadOptions.WithVariables,
-			project.LoadOptions.WithFeatures(api.Cache),
 			project.LoadOptions.WithIntegrations,
 			project.LoadOptions.WithApplicationVariables,
 			project.LoadOptions.WithApplicationWithDeploymentStrategies,
@@ -259,12 +268,7 @@ func (api *API) postWorkflowJobHookCallbackHandler() service.Handler {
 			return sdk.WrapError(err, "cannot load workflow run")
 		}
 
-		pv, err := project.LoadAllVariablesWithDecrytion(tx, wr.Workflow.ProjectID)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project variable")
-		}
-
-		secrets, err := workflow.LoadSecrets(ctx, tx, api.Cache, nil, wr, pv)
+		secrets, err := workflow.LoadDecryptSecrets(ctx, tx, wr, nil)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load secrets")
 		}
@@ -321,12 +325,7 @@ func (api *API) getWorkflowJobHookDetailsHandler() service.Handler {
 			return sdk.WithStack(sdk.ErrNotFound)
 		}
 
-		pv, err := project.LoadAllVariablesWithDecrytion(db, wr.Workflow.ProjectID)
-		if err != nil {
-			return sdk.WrapError(err, "cannot load project variable")
-		}
-
-		secrets, errSecret := workflow.LoadSecrets(ctx, db, api.Cache, nil, wr, pv)
+		secrets, errSecret := workflow.LoadDecryptSecrets(ctx, db, wr, nil)
 		if errSecret != nil {
 			return sdk.WrapError(errSecret, "cannot load secrets")
 		}

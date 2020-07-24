@@ -21,7 +21,7 @@ func Test_getKeysInApplicationHandler(t *testing.T) {
 	api, db, router := newTestAPI(t)
 
 	//Create admin user
-	u, pass := assets.InsertAdminUser(t, api.mustDB())
+	u, pass := assets.InsertAdminUser(t, db)
 
 	//Insert Project
 	pkey := sdk.RandomString(10)
@@ -31,7 +31,7 @@ func Test_getKeysInApplicationHandler(t *testing.T) {
 	app := &sdk.Application{
 		Name: sdk.RandomString(10),
 	}
-	require.NoError(t, application.Insert(api.mustDB(), proj.ID, app))
+	require.NoError(t, application.Insert(db, proj.ID, app))
 
 	k := &sdk.ApplicationKey{
 		Name:          "mykey",
@@ -48,7 +48,7 @@ func Test_getKeysInApplicationHandler(t *testing.T) {
 	k.Private = pgpK.Private
 	k.KeyID = pgpK.KeyID
 
-	if err := application.InsertKey(api.mustDB(), k); err != nil {
+	if err := application.InsertKey(db, k); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,7 +77,7 @@ func Test_deleteKeyInApplicationHandler(t *testing.T) {
 	api, db, router := newTestAPI(t)
 
 	//Create admin user
-	u, pass := assets.InsertAdminUser(t, api.mustDB())
+	u, pass := assets.InsertAdminUser(t, db)
 
 	//Insert Project
 	pkey := sdk.RandomString(10)
@@ -87,7 +87,7 @@ func Test_deleteKeyInApplicationHandler(t *testing.T) {
 	app := &sdk.Application{
 		Name: sdk.RandomString(10),
 	}
-	require.NoError(t, application.Insert(api.mustDB(), proj.ID, app))
+	require.NoError(t, application.Insert(db, proj.ID, app))
 
 	k := &sdk.ApplicationKey{
 		Name:          "mykey",
@@ -97,7 +97,7 @@ func Test_deleteKeyInApplicationHandler(t *testing.T) {
 		ApplicationID: app.ID,
 	}
 
-	if err := application.InsertKey(api.mustDB(), k); err != nil {
+	if err := application.InsertKey(db, k); err != nil {
 		t.Fatal(err)
 	}
 
@@ -127,7 +127,7 @@ func Test_addKeyInApplicationHandler(t *testing.T) {
 	api, db, router := newTestAPI(t)
 
 	//Create admin user
-	u, pass := assets.InsertAdminUser(t, api.mustDB())
+	u, pass := assets.InsertAdminUser(t, db)
 
 	//Insert Project
 	pkey := sdk.RandomString(10)
@@ -137,7 +137,7 @@ func Test_addKeyInApplicationHandler(t *testing.T) {
 	app := &sdk.Application{
 		Name: sdk.RandomString(10),
 	}
-	require.NoError(t, application.Insert(api.mustDB(), proj.ID, app))
+	require.NoError(t, application.Insert(db, proj.ID, app))
 
 	k := &sdk.ApplicationKey{
 		Name: "mykey",

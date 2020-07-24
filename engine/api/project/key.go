@@ -12,10 +12,9 @@ import (
 	"strings"
 
 	"github.com/fsamin/go-shredder"
-
 	"github.com/go-gorp/gorp"
-	"github.com/ovh/cds/engine/api/database/gorpmapping"
 	"github.com/ovh/cds/sdk"
+	"github.com/ovh/cds/sdk/gorpmapping"
 )
 
 func init() {

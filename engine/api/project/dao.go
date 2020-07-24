@@ -10,14 +10,14 @@ import (
 	"github.com/go-gorp/gorp"
 
 	"github.com/ovh/cds/engine/api/cache"
-	"github.com/ovh/cds/engine/api/database/gorpmapping"
 	"github.com/ovh/cds/engine/api/environment"
 	"github.com/ovh/cds/engine/api/group"
 	"github.com/ovh/cds/engine/api/keys"
-	"github.com/ovh/cds/engine/api/observability"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
 	"github.com/ovh/cds/sdk"
+	"github.com/ovh/cds/sdk/gorpmapping"
 	"github.com/ovh/cds/sdk/log"
+	"github.com/ovh/cds/sdk/telemetry"
 )
 
 func loadAllByRepo(ctx context.Context, db gorp.SqlExecutor, query string, args []interface{}, opts ...LoadOptionFunc) (sdk.Projects, error) {
@@ -26,6 +26,9 @@ func loadAllByRepo(ctx context.Context, db gorp.SqlExecutor, query string, args 
 
 // LoadAllByRepoAndGroupIDs returns all projects with an application linked to the repo against the groups
 func LoadAllByRepoAndGroupIDs(ctx context.Context, db gorp.SqlExecutor, groupIDs []int64, repo string, opts ...LoadOptionFunc) (sdk.Projects, error) {
+	var end func()
+	ctx, end = telemetry.Span(ctx, "project.LoadAllByRepoAndGroupIDs")
+	defer end()
 	query := `SELECT DISTINCT project.*
 		FROM  project
 		JOIN  application on project.id = application.project_id
@@ -44,6 +47,9 @@ func LoadAllByRepoAndGroupIDs(ctx context.Context, db gorp.SqlExecutor, groupIDs
 
 // LoadAllByRepo returns all projects with an application linked to the repo
 func LoadAllByRepo(ctx context.Context, db gorp.SqlExecutor, store cache.Store, repo string, opts ...LoadOptionFunc) (sdk.Projects, error) {
+	var end func()
+	ctx, end = telemetry.Span(ctx, "project.LoadAllByRepo")
+	defer end()
 	query := `SELECT DISTINCT project.*
 	FROM  project
 	JOIN  application on project.id = application.project_id
@@ -55,6 +61,9 @@ func LoadAllByRepo(ctx context.Context, db gorp.SqlExecutor, store cache.Store, 
 
 // LoadAllByGroupIDs returns all projects given groups
 func LoadAllByGroupIDs(ctx context.Context, db gorp.SqlExecutor, store cache.Store, IDs []int64, opts ...LoadOptionFunc) (sdk.Projects, error) {
+	var end func()
+	ctx, end = telemetry.Span(ctx, "project.LoadAllByGroupIDs")
+	defer end()
 	query := `SELECT project.*
 	FROM project
 	WHERE project.id IN (
@@ -72,6 +81,9 @@ func LoadAllByGroupIDs(ctx context.Context, db gorp.SqlExecutor, store cache.Sto
 
 // LoadAll returns all projects
 func LoadAll(ctx context.Context, db gorp.SqlExecutor, store cache.Store, opts ...LoadOptionFunc) (sdk.Projects, error) {
+	var end func()
+	ctx, end = telemetry.Span(ctx, "project.LoadAll")
+	defer end()
 	query := "select project.* from project ORDER by project.name, project.projectkey ASC"
 	return loadprojects(ctx, db, opts, query)
 }
@@ -139,7 +151,7 @@ func Delete(db gorp.SqlExecutor, key string) error {
 const BuiltinGPGKey = "builtin"
 
 // Insert a new project in database
-func Insert(db gorp.SqlExecutor, proj *sdk.Project) error {
+func Insert(db gorpmapping.SqlExecutorWithTx, proj *sdk.Project) error {
 	if err := proj.IsValid(); err != nil {
 		return sdk.WrapError(err, "project is not valid")
 	}
@@ -227,6 +239,9 @@ func LoadByID(db gorp.SqlExecutor, id int64, opts ...LoadOptionFunc) (*sdk.Proje
 
 // Load  returns a project with all its variables and applications given a user. It can also returns pipelines, environments, groups, permission, and repositorires manager. See LoadOptions
 func Load(ctx context.Context, db gorp.SqlExecutor, key string, opts ...LoadOptionFunc) (*sdk.Project, error) {
+	var end func()
+	ctx, end = telemetry.Span(ctx, "project.Load")
+	defer end()
 	return load(ctx, db, opts, "select project.* from project where projectkey = $1", key)
 }
 
@@ -241,7 +256,7 @@ func LoadProjectByWorkflowID(db gorp.SqlExecutor, workflowID int64, opts ...Load
 
 func loadprojects(ctx context.Context, db gorp.SqlExecutor, opts []LoadOptionFunc, query string, args ...interface{}) ([]sdk.Project, error) {
 	var end func()
-	_, end = observability.Span(ctx, "project.loadprojects")
+	ctx, end = telemetry.Span(ctx, "project.loadprojects")
 	defer end()
 
 	var res []dbProject
@@ -268,7 +283,7 @@ func loadprojects(ctx context.Context, db gorp.SqlExecutor, opts []LoadOptionFun
 
 func load(ctx context.Context, db gorp.SqlExecutor, opts []LoadOptionFunc, query string, args ...interface{}) (*sdk.Project, error) {
 	var end func()
-	_, end = observability.Span(ctx, "project.load")
+	ctx, end = telemetry.Span(ctx, "project.load")
 	defer end()
 
 	dbProj := &dbProject{}
@@ -284,7 +299,7 @@ func load(ctx context.Context, db gorp.SqlExecutor, opts []LoadOptionFunc, query
 }
 
 func unwrap(ctx context.Context, db gorp.SqlExecutor, p *dbProject, opts []LoadOptionFunc) (*sdk.Project, error) {
-	ctx, end := observability.Span(ctx, "project.unwrap")
+	ctx, end := telemetry.Span(ctx, "project.unwrap")
 	defer end()
 
 	proj := sdk.Project(*p)
@@ -294,7 +309,7 @@ func unwrap(ctx context.Context, db gorp.SqlExecutor, p *dbProject, opts []LoadO
 			continue
 		}
 		name := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
-		_, end = observability.Span(ctx, name)
+		_, end = telemetry.Span(ctx, name)
 		if err := f(db, &proj); err != nil && sdk.Cause(err) != sql.ErrNoRows {
 			end()
 			return nil, err
@@ -309,76 +324,6 @@ func unwrap(ctx context.Context, db gorp.SqlExecutor, p *dbProject, opts []LoadO
 	proj.VCSServers = vcsServers
 
 	return &proj, nil
-}
-
-// Labels return list of labels given a project ID
-func Labels(db gorp.SqlExecutor, projectID int64) ([]sdk.Label, error) {
-	var labels []sdk.Label
-	query := `
-	SELECT project_label.*
-		FROM project_label
-		WHERE project_label.project_id = $1
-		ORDER BY project_label.name
-	`
-	if _, err := db.Select(&labels, query, projectID); err != nil {
-		if err == sql.ErrNoRows {
-			return labels, nil
-		}
-		return labels, sdk.WrapError(err, "Cannot load labels")
-	}
-
-	return labels, nil
-}
-
-// LabelByName return a label given his name and project id
-func LabelByName(db gorp.SqlExecutor, projectID int64, labelName string) (sdk.Label, error) {
-	var label sdk.Label
-	err := db.SelectOne(&label, "SELECT project_label.* FROM project_label WHERE project_id = $1 AND name = $2", projectID, labelName)
-
-	return label, err
-}
-
-// DeleteLabel delete a label given a label ID
-func DeleteLabel(db gorp.SqlExecutor, labelID int64) error {
-	query := "DELETE FROM project_label WHERE id = $1"
-	if _, err := db.Exec(query, labelID); err != nil {
-		if err == sql.ErrNoRows {
-			return nil
-		}
-		return sdk.WrapError(err, "Cannot delete labels")
-	}
-
-	return nil
-}
-
-// InsertLabel insert a label
-func InsertLabel(db gorp.SqlExecutor, label *sdk.Label) error {
-	if err := label.IsValid(); err != nil {
-		return err
-	}
-
-	lbl := dbLabel(*label)
-	if err := db.Insert(&lbl); err != nil {
-		return sdk.WrapError(err, "Cannot insert labels")
-	}
-	*label = sdk.Label(lbl)
-
-	return nil
-}
-
-// UpdateLabel update a label
-func UpdateLabel(db gorp.SqlExecutor, label *sdk.Label) error {
-	if err := label.IsValid(); err != nil {
-		return err
-	}
-
-	lbl := dbLabel(*label)
-	if _, err := db.Update(&lbl); err != nil {
-		return sdk.WrapError(err, "Cannot update labels")
-	}
-	*label = sdk.Label(lbl)
-
-	return nil
 }
 
 // UpdateFavorite add or delete project from user favorites

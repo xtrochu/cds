@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,7 +20,6 @@ import (
 	"github.com/ovh/cds/engine/api/event"
 	"github.com/ovh/cds/engine/api/integration"
 	"github.com/ovh/cds/engine/api/objectstore"
-	"github.com/ovh/cds/engine/api/observability"
 	"github.com/ovh/cds/engine/api/permission"
 	"github.com/ovh/cds/engine/api/project"
 	"github.com/ovh/cds/engine/api/workflow"
@@ -27,6 +27,7 @@ import (
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/log"
 	"github.com/ovh/cds/sdk/luascript"
+	"github.com/ovh/cds/sdk/telemetry"
 )
 
 const (
@@ -179,6 +180,8 @@ func (api *API) deleteWorkflowRunsBranchHandler() service.Handler {
 		if err := workflow.MarkWorkflowRunsAsDelete(api.mustDB(), wfIDs); err != nil {
 			return err
 		}
+
+		workflow.CountWorkflowRunsMarkToDelete(ctx, api.mustDB(), api.Metrics.WorkflowRunsMarkToDelete)
 
 		return service.WriteJSON(w, nil, http.StatusOK)
 	}
@@ -334,6 +337,8 @@ func (api *API) deleteWorkflowRunHandler() service.Handler {
 			return sdk.WrapError(err, "cannot mark workflow run %d as delete", run.ID)
 		}
 
+		workflow.CountWorkflowRunsMarkToDelete(ctx, api.mustDB(), api.Metrics.WorkflowRunsMarkToDelete)
+
 		return service.WriteJSON(w, nil, http.StatusAccepted)
 	}
 }
@@ -384,12 +389,12 @@ func (api *API) stopWorkflowRunHandler() service.Handler {
 
 		workflowRuns := report.WorkflowRuns()
 		if len(workflowRuns) > 0 {
-			observability.Current(ctx,
-				observability.Tag(observability.TagProjectKey, proj.Key),
-				observability.Tag(observability.TagWorkflow, workflowRuns[0].Workflow.Name),
+			telemetry.Current(ctx,
+				telemetry.Tag(telemetry.TagProjectKey, proj.Key),
+				telemetry.Tag(telemetry.TagWorkflow, workflowRuns[0].Workflow.Name),
 			)
 			if workflowRuns[0].Status == sdk.StatusFail {
-				observability.Record(api.Router.Background, api.Metrics.WorkflowRunFailed, 1)
+				telemetry.Record(api.Router.Background, api.Metrics.WorkflowRunFailed, 1)
 			}
 		}
 
@@ -401,9 +406,9 @@ func stopWorkflowRun(ctx context.Context, dbFunc func() *gorp.DbMap, store cache
 	run *sdk.WorkflowRun, ident sdk.Identifiable, parentWorkflowRunID int64) (*workflow.ProcessorReport, error) {
 	report := new(workflow.ProcessorReport)
 
-	tx, errTx := dbFunc().Begin()
-	if errTx != nil {
-		return nil, sdk.WrapError(errTx, "unable to create transaction")
+	tx, err := dbFunc().Begin()
+	if err != nil {
+		return nil, sdk.WrapError(err, "unable to create transaction")
 	}
 	defer tx.Rollback() //nolint
 
@@ -506,7 +511,6 @@ func updateParentWorkflowRun(ctx context.Context, dbFunc func() *gorp.DbMap, sto
 	parentProj, err := project.Load(context.Background(),
 		dbFunc(), run.RootRun().HookEvent.ParentWorkflow.Key,
 		project.LoadOptions.WithVariables,
-		project.LoadOptions.WithFeatures(store),
 		project.LoadOptions.WithIntegrations,
 		project.LoadOptions.WithApplicationVariables,
 		project.LoadOptions.WithApplicationWithDeploymentStrategies,
@@ -643,10 +647,20 @@ func (api *API) getWorkflowCommitsHandler() service.Handler {
 			}
 		}
 
+		tx, err := api.mustDB().Begin()
+		if err != nil {
+			return sdk.WithStack(err)
+		}
+		defer tx.Rollback() // nolint
+
 		log.Debug("getWorkflowCommitsHandler> VCSHash: %s VCSBranch: %s", wfNodeRun.VCSHash, wfNodeRun.VCSBranch)
-		commits, _, err := workflow.GetNodeRunBuildCommits(ctx, api.mustDB(), api.Cache, *proj, wf, nodeName, number, wfNodeRun, &app, &env)
+		commits, _, err := workflow.GetNodeRunBuildCommits(ctx, tx, api.Cache, *proj, wf, nodeName, number, wfNodeRun, &app, &env)
 		if err != nil {
 			return sdk.WrapError(err, "unable to load commits")
+		}
+
+		if err := tx.Commit(); err != nil {
+			return sdk.WithStack(err)
 		}
 
 		return service.WriteJSON(w, commits, http.StatusOK)
@@ -687,7 +701,7 @@ func (api *API) stopWorkflowNodeRunHandler() service.Handler {
 		}
 
 		sp := sdk.SpawnMsg{ID: sdk.MsgWorkflowNodeStop.ID, Args: []interface{}{getAPIConsumer(ctx).GetUsername()}}
-		report, err := workflow.StopWorkflowNodeRun(ctx, api.mustDB, api.Cache, *p, *workflowRun, *workflowNodeRun, sdk.SpawnInfo{
+		r1, err := workflow.StopWorkflowNodeRun(ctx, api.mustDB, api.Cache, *p, *workflowRun, *workflowNodeRun, sdk.SpawnInfo{
 			APITime:     time.Now(),
 			RemoteTime:  time.Now(),
 			Message:     sp,
@@ -697,7 +711,10 @@ func (api *API) stopWorkflowNodeRunHandler() service.Handler {
 			return sdk.WrapError(err, "unable to stop workflow node run")
 		}
 
-		// Reload workflow run then resync its status
+		sdk.GoRoutine(context.Background(), fmt.Sprintf("stopWorkflowNodeRunHandler-%d", workflowNodeRunID), func(ctx context.Context) {
+			WorkflowSendEvent(context.Background(), api.mustDB(), api.Cache, *p, r1)
+		})
+
 		tx, err := api.mustDB().Begin()
 		if err != nil {
 			return sdk.WithStack(err)
@@ -711,23 +728,26 @@ func (api *API) stopWorkflowNodeRunHandler() service.Handler {
 			return sdk.WrapError(err, "unable to load workflow run with number %d for workflow %s", workflowRunNumber, workflowName)
 		}
 
-		r1, err := workflow.ResyncWorkflowRunStatus(ctx, tx, workflowRun)
-		report.Merge(ctx, r1)
+		r2, err := workflow.ResyncWorkflowRunStatus(ctx, tx, workflowRun)
 		if err != nil {
 			return sdk.WrapError(err, "unable to resync workflow run status")
 		}
 
-		observability.Current(ctx,
-			observability.Tag(observability.TagProjectKey, p.Key),
-			observability.Tag(observability.TagWorkflow, workflowRun.Workflow.Name),
+		telemetry.Current(ctx,
+			telemetry.Tag(telemetry.TagProjectKey, p.Key),
+			telemetry.Tag(telemetry.TagWorkflow, workflowRun.Workflow.Name),
 		)
 		if workflowRun.Status == sdk.StatusFail {
-			observability.Record(api.Router.Background, api.Metrics.WorkflowRunFailed, 1)
+			telemetry.Record(api.Router.Background, api.Metrics.WorkflowRunFailed, 1)
 		}
 
 		if err := tx.Commit(); err != nil {
 			return sdk.WithStack(err)
 		}
+
+		sdk.GoRoutine(context.Background(), fmt.Sprintf("stopWorkflowNodeRunHandler-%d-resync-run-%d", workflowNodeRunID, workflowRun.ID), func(ctx context.Context) {
+			WorkflowSendEvent(context.Background(), api.mustDB(), api.Cache, *p, r2)
+		})
 
 		go func(ID int64) {
 			wRun, err := workflow.LoadRunByID(api.mustDB(), ID, workflow.LoadRunOptions{DisableDetailledNodeRun: true})
@@ -743,8 +763,6 @@ func (api *API) stopWorkflowNodeRunHandler() service.Handler {
 				}
 			}
 		}(workflowRun.ID)
-
-		go WorkflowSendEvent(context.Background(), api.mustDB(), api.Cache, *p, report)
 
 		return service.WriteJSON(w, workflowNodeRun, http.StatusOK)
 	}
@@ -785,17 +803,16 @@ func (api *API) postWorkflowRunHandler() service.Handler {
 		key := vars["key"]
 		name := vars["permWorkflowName"]
 
-		observability.Current(ctx,
-			observability.Tag(observability.TagProjectKey, key),
-			observability.Tag(observability.TagWorkflow, name),
+		telemetry.Current(ctx,
+			telemetry.Tag(telemetry.TagProjectKey, key),
+			telemetry.Tag(telemetry.TagWorkflow, name),
 		)
-		observability.Record(api.Router.Background, api.Metrics.WorkflowRunStarted, 1)
+		telemetry.Record(api.Router.Background, api.Metrics.WorkflowRunStarted, 1)
 
 		// LOAD PROJECT
-		_, next := observability.Span(ctx, "project.Load")
+		_, next := telemetry.Span(ctx, "project.Load")
 		p, errP := project.Load(ctx, api.mustDB(), key,
 			project.LoadOptions.WithVariables,
-			project.LoadOptions.WithFeatures(api.Cache),
 			project.LoadOptions.WithIntegrations,
 		)
 		next()
@@ -859,6 +876,10 @@ func (api *API) postWorkflowRunHandler() service.Handler {
 		var wf *sdk.Workflow
 		// IF CONTINUE EXISTING RUN
 		if lastRun != nil {
+			if lastRun.ReadOnly {
+				return sdk.NewErrorFrom(sdk.ErrForbidden, "this workflow execution is on read only mode, it cannot be run anymore")
+			}
+
 			if opts != nil && opts.Manual != nil && opts.Manual.Resync {
 				log.Debug("Resync workflow %d for run %d", lastRun.Workflow.ID, lastRun.ID)
 				if err := workflow.Resync(ctx, api.mustDB(), api.Cache, *p, lastRun); err != nil {
@@ -925,12 +946,8 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 
 	p, err := project.Load(ctx, api.mustDB(), projKey,
 		project.LoadOptions.WithVariables,
-		project.LoadOptions.WithFeatures(api.Cache),
+		project.LoadOptions.WithKeys,
 		project.LoadOptions.WithIntegrations,
-		project.LoadOptions.WithApplicationVariables,
-		project.LoadOptions.WithApplicationWithDeploymentStrategies,
-		project.LoadOptions.WithEnvironments,
-		project.LoadOptions.WithPipelines,
 	)
 	if err != nil {
 		r := failInitWorkflowRun(ctx, api.mustDB(), wfRun, sdk.WrapError(err, "cannot load project for as code workflow creation"))
@@ -942,6 +959,7 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 		go WorkflowSendEvent(context.Background(), api.mustDB(), api.Cache, *p, report)
 	}()
 
+	var workflowSecrets *workflow.PushSecrets
 	if wfRun.Status == sdk.StatusPending {
 		// Sync as code event to remove events in case where a PR was merged
 		if len(wf.AsCodeEvent) > 0 {
@@ -973,12 +991,12 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 				project.LoadOptions.WithVariables,
 				project.LoadOptions.WithGroups,
 				project.LoadOptions.WithApplicationVariables,
+				project.LoadOptions.WithApplicationKeys,
 				project.LoadOptions.WithApplicationWithDeploymentStrategies,
 				project.LoadOptions.WithEnvironments,
 				project.LoadOptions.WithPipelines,
 				project.LoadOptions.WithClearKeys,
 				project.LoadOptions.WithClearIntegrations,
-				project.LoadOptions.WithFeatures(api.Cache),
 			)
 			if err != nil {
 				r := failInitWorkflowRun(ctx, api.mustDB(), wfRun, sdk.WrapError(err, "cannot load project for as code workflow creation"))
@@ -989,7 +1007,8 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 			// Get workflow from repository
 			log.Debug("workflow.CreateFromRepository> %s", wf.Name)
 			oldWf := *wf
-			asCodeInfosMsg, err := workflow.CreateFromRepository(ctx, api.mustDB(), api.Cache, p1, wf, *opts, *u, project.DecryptWithBuiltinKey)
+			var asCodeInfosMsg []sdk.Message
+			workflowSecrets, asCodeInfosMsg, err = workflow.CreateFromRepository(ctx, api.mustDB(), api.Cache, p1, wf, *opts, *u, project.DecryptWithBuiltinKey)
 			infos := make([]sdk.SpawnMsg, len(asCodeInfosMsg))
 			for i, msg := range asCodeInfosMsg {
 				infos[i] = sdk.SpawnMsg{
@@ -1006,14 +1025,42 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 			}
 
 			event.PublishWorkflowUpdate(ctx, p.Key, *wf, oldWf, u)
+		} else {
+			// Get all secrets for non ascode run
+			workflowSecrets, err = workflow.RetrieveSecrets(ctx, api.mustDB(), *wf)
+			if err != nil {
+				r1 := failInitWorkflowRun(ctx, api.mustDB(), wfRun, sdk.WrapError(err, "unable to retrieve workflow secret"))
+				report.Merge(ctx, r1)
+				return
+			}
 		}
 
 		wfRun.Workflow = *wf
+
+		if err := saveWorkflowRunSecrets(ctx, api.mustDB(), p.ID, *wfRun, workflowSecrets); err != nil {
+			r := failInitWorkflowRun(ctx, api.mustDB(), wfRun, sdk.WrapError(err, "unable to compute workflow secrets %s/%s", p.Key, wf.Name))
+			report.Merge(ctx, r)
+			return
+		}
 	}
 
-	r, err := workflow.StartWorkflowRun(ctx, api.mustDB(), api.Cache, *p, wfRun, opts, u, asCodeInfosMsg)
+	tx, err := api.mustDB().Begin()
+	if err != nil {
+		r := failInitWorkflowRun(ctx, api.mustDB(), wfRun, sdk.WrapError(err, "unable to start workflow %s/%s", p.Key, wf.Name))
+		report.Merge(ctx, r)
+		return
+	}
+
+	r, err := workflow.StartWorkflowRun(ctx, tx, api.Cache, *p, wfRun, opts, u, asCodeInfosMsg)
 	report.Merge(ctx, r)
 	if err != nil {
+		_ = tx.Rollback()
+		r := failInitWorkflowRun(ctx, api.mustDB(), wfRun, sdk.WrapError(err, "unable to start workflow %s/%s", p.Key, wf.Name))
+		report.Merge(ctx, r)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		_ = tx.Rollback()
 		r := failInitWorkflowRun(ctx, api.mustDB(), wfRun, sdk.WrapError(err, "unable to start workflow %s/%s", p.Key, wf.Name))
 		report.Merge(ctx, r)
 		return
@@ -1022,9 +1069,24 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 
 	// Purge workflow run
 	sdk.GoRoutine(ctx, "workflow.PurgeWorkflowRun", func(ctx context.Context) {
-		if err := workflow.PurgeWorkflowRun(ctx, api.mustDB(), *wf, api.Metrics.WorkflowRunsMarkToDelete); err != nil {
+
+		tx, err := api.mustDB().Begin()
+		defer tx.Rollback() // nolint
+		if err != nil {
 			log.Error(ctx, "workflow.PurgeWorkflowRun> error %v", err)
+			return
 		}
+		if err := workflow.PurgeWorkflowRun(ctx, tx, *wf); err != nil {
+			log.Error(ctx, "workflow.PurgeWorkflowRun> error %v", err)
+			return
+		}
+		if err := tx.Commit(); err != nil {
+			log.Error(ctx, "workflow.PurgeWorkflowRun> unable to commit transaction:  %v", err)
+			return
+		}
+
+		workflow.CountWorkflowRunsMarkToDelete(ctx, api.mustDB(), api.Metrics.WorkflowRunsMarkToDelete)
+
 	}, api.PanicDump())
 
 	// Update parent
@@ -1036,6 +1098,136 @@ func (api *API) initWorkflowRun(ctx context.Context, projKey string, wf *sdk.Wor
 		}
 		go WorkflowSendEvent(context.Background(), api.mustDB(), api.Cache, *p, reportParent)
 	}
+}
+
+func saveWorkflowRunSecrets(ctx context.Context, db *gorp.DbMap, projID int64, wr sdk.WorkflowRun, secrets *workflow.PushSecrets) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return sdk.WithStack(err)
+	}
+	defer tx.Rollback() // nolint
+
+	// Get project secrets
+	p, err := project.LoadByID(tx, projID, project.LoadOptions.WithVariablesWithClearPassword, project.LoadOptions.WithClearKeys)
+	if err != nil {
+		return err
+	}
+
+	// Create a snapshot of project secrets and keys
+	pv := sdk.VariablesFilter(sdk.FromProjectVariables(p.Variables), sdk.SecretVariable, sdk.KeyVariable)
+	pv = sdk.VariablesPrefix(pv, "cds.proj.")
+	for _, v := range pv {
+		wrSecret := sdk.WorkflowRunSecret{
+			WorkflowRunID: wr.ID,
+			Context:       workflow.SecretProjContext,
+			Name:          v.Name,
+			Type:          v.Type,
+			Value:         []byte(v.Value),
+		}
+		if err := workflow.InsertRunSecret(ctx, tx, &wrSecret); err != nil {
+			return err
+		}
+	}
+
+	for _, k := range p.Keys {
+		wrSecret := sdk.WorkflowRunSecret{
+			WorkflowRunID: wr.ID,
+			Context:       workflow.SecretProjContext,
+			Name:          fmt.Sprintf("cds.key.%s.priv", k.Name),
+			Type:          string(k.Type),
+			Value:         []byte(k.Private),
+		}
+		if err := workflow.InsertRunSecret(ctx, tx, &wrSecret); err != nil {
+			return err
+		}
+	}
+
+	// Find Needed Project Integrations
+	ppIDs := make(map[int64]string, 0)
+	for _, n := range wr.Workflow.WorkflowData.Array() {
+		if n.Context == nil || n.Context.ProjectIntegrationID == 0 {
+			continue
+		}
+		ppIDs[n.Context.ProjectIntegrationID] = ""
+	}
+	for ppID := range ppIDs {
+		projectIntegration, err := integration.LoadProjectIntegrationByIDWithClearPassword(tx, ppID)
+		if err != nil {
+			return err
+		}
+		ppIDs[ppID] = projectIntegration.Name
+
+		// Project integration secret variable
+		for k, v := range projectIntegration.Config {
+			if v.Type != sdk.SecretVariable {
+				continue
+			}
+			wrSecret := sdk.WorkflowRunSecret{
+				WorkflowRunID: wr.ID,
+				Context:       fmt.Sprintf(workflow.SecretProjIntegrationContext, ppID),
+				Name:          fmt.Sprintf("cds.integration.%s", k),
+				Type:          v.Type,
+				Value:         []byte(v.Value),
+			}
+			if err := workflow.InsertRunSecret(ctx, tx, &wrSecret); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Application secret
+	for id, variables := range secrets.ApplicationsSecrets {
+		// Filter to avoid getting cds.deployment variables
+		for _, v := range variables {
+			var wrSecret sdk.WorkflowRunSecret
+			switch {
+			case strings.HasPrefix(v.Name, "cds.app.") || strings.HasPrefix(v.Name, "cds.key."):
+				wrSecret = sdk.WorkflowRunSecret{
+					WorkflowRunID: wr.ID,
+					Context:       fmt.Sprintf(workflow.SecretAppContext, id),
+					Name:          v.Name,
+					Type:          v.Type,
+					Value:         []byte(v.Value),
+				}
+			case strings.Contains(v.Name, ":cds.integration."):
+				piName := strings.SplitN(v.Name, ":", 2)
+				wrSecret = sdk.WorkflowRunSecret{
+					WorkflowRunID: wr.ID,
+					Context:       fmt.Sprintf(workflow.SecretApplicationIntegrationContext, id, piName[0]),
+					Name:          piName[1],
+					Type:          v.Type,
+					Value:         []byte(v.Value),
+				}
+			default:
+				continue
+			}
+			if err := workflow.InsertRunSecret(ctx, tx, &wrSecret); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Environment secret
+	for id, variables := range secrets.EnvironmentdSecrets {
+		for _, v := range variables {
+			wrSecret := sdk.WorkflowRunSecret{
+				WorkflowRunID: wr.ID,
+				Context:       fmt.Sprintf(workflow.SecretEnvContext, id),
+				Name:          v.Name,
+				Type:          v.Type,
+				Value:         []byte(v.Value),
+			}
+			if err := workflow.InsertRunSecret(ctx, tx, &wrSecret); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return sdk.WithStack(err)
+	}
+
+	return nil
 }
 
 func failInitWorkflowRun(ctx context.Context, db *gorp.DbMap, wfRun *sdk.WorkflowRun, err error) *workflow.ProcessorReport {
@@ -1367,7 +1559,6 @@ func (api *API) getWorkflowRunTagsHandler() service.Handler {
 
 func (api *API) postResyncVCSWorkflowRunHandler() service.Handler {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-		db := api.mustDB()
 		vars := mux.Vars(r)
 		key := vars["key"]
 		name := vars["permWorkflowName"]
@@ -1376,17 +1567,17 @@ func (api *API) postResyncVCSWorkflowRunHandler() service.Handler {
 			return err
 		}
 
-		proj, err := project.Load(ctx, db, key, project.LoadOptions.WithVariables)
+		proj, err := project.Load(ctx, api.mustDB(), key, project.LoadOptions.WithVariables)
 		if err != nil {
 			return sdk.WrapError(err, "cannot load project")
 		}
 
-		wfr, err := workflow.LoadRun(ctx, db, key, name, number, workflow.LoadRunOptions{DisableDetailledNodeRun: true})
+		wfr, err := workflow.LoadRun(ctx, api.mustDB(), key, name, number, workflow.LoadRunOptions{DisableDetailledNodeRun: true})
 		if err != nil {
 			return sdk.WrapError(err, "cannot load workflow run")
 		}
 
-		if err := workflow.ResyncCommitStatus(ctx, db, api.Cache, *proj, wfr); err != nil {
+		if err := workflow.ResyncCommitStatus(ctx, api.mustDB(), api.Cache, *proj, wfr); err != nil {
 			return sdk.WrapError(err, "cannot resync workflow run commit status")
 		}
 

@@ -36,12 +36,12 @@ func TestAPI_detachRepositoriesManagerHandler(t *testing.T) {
 		require.NoError(t, services.Delete(db, &srv))
 	}
 
-	mockVCSSservice, _ := assets.InsertService(t, db, "TestAPI_detachRepositoriesManagerVCS", services.TypeVCS)
+	mockVCSSservice, _ := assets.InsertService(t, db, "TestAPI_detachRepositoriesManagerVCS", sdk.TypeVCS)
 	defer func() {
 		services.Delete(db, mockVCSSservice) // nolint
 	}()
 
-	mockServiceHook, _ := assets.InsertService(t, db, "TestAPI_detachRepositoriesManagerHook", services.TypeHooks)
+	mockServiceHook, _ := assets.InsertService(t, db, "TestAPI_detachRepositoriesManagerHook", sdk.TypeHooks)
 	defer func() {
 		_ = services.Delete(db, mockServiceHook) // nolint
 	}()
@@ -183,7 +183,7 @@ vcs_ssh_key: proj-blabla
 `
 	var eapp = new(exportentities.Application)
 	assert.NoError(t, yaml.Unmarshal([]byte(appS), eapp))
-	app, _, globalError := application.ParseAndImport(context.Background(), db, api.Cache, *proj, eapp, application.ImportOptions{Force: true}, nil, u)
+	app, _, _, globalError := application.ParseAndImport(context.Background(), db, api.Cache, *proj, eapp, application.ImportOptions{Force: true}, nil, u)
 	assert.NoError(t, globalError)
 
 	proj, _ = project.LoadByID(db, proj.ID, project.LoadOptions.WithApplications, project.LoadOptions.WithPipelines, project.LoadOptions.WithEnvironments, project.LoadOptions.WithGroups)
@@ -229,7 +229,7 @@ vcs_ssh_key: proj-blabla
 	t.Log("Inserting workflow run=====")
 
 	// creates a run
-	wr, errWR := workflow.CreateRun(db, w1, nil, u)
+	wr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 	assert.NoError(t, errWR)
 	wr.Workflow = *w1
 	t.Log("Starting workflow run=====")

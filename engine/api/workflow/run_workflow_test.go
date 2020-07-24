@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ovh/cds/engine/api/authentication"
 	"github.com/ovh/cds/engine/api/bootstrap"
 	"github.com/ovh/cds/engine/api/group"
@@ -17,8 +20,6 @@ import (
 	"github.com/ovh/cds/engine/api/workermodel"
 	"github.com/ovh/cds/engine/api/workflow"
 	"github.com/ovh/cds/sdk"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestManualRun1(t *testing.T) {
@@ -110,7 +111,7 @@ func TestManualRun1(t *testing.T) {
 	t.Logf("w1: %+v", w1)
 	require.NoError(t, err)
 
-	wr, errWR := workflow.CreateRun(db, w1, nil, u)
+	wr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 	assert.NoError(t, errWR)
 	wr.Workflow = *w1
 	consumer, _ := authentication.LoadConsumerByTypeAndUserID(context.TODO(), db, sdk.ConsumerLocal, u.ID, authentication.LoadConsumerOptions.WithAuthentifiedUser)
@@ -125,7 +126,7 @@ func TestManualRun1(t *testing.T) {
 	}, consumer, nil)
 	require.NoError(t, errS)
 
-	wr2, errWR := workflow.CreateRun(db, w1, nil, u)
+	wr2, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 	assert.NoError(t, errWR)
 	wr2.Workflow = *w1
 	_, errS = workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wr2, &sdk.WorkflowRunPostHandlerOption{
@@ -270,7 +271,7 @@ func TestManualRun2(t *testing.T) {
 	require.NoError(t, err)
 	consumer, _ := authentication.LoadConsumerByTypeAndUserID(context.TODO(), db, sdk.ConsumerLocal, u.ID, authentication.LoadConsumerOptions.WithAuthentifiedUser)
 
-	wr, errWR := workflow.CreateRun(db, w1, nil, u)
+	wr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 	assert.NoError(t, errWR)
 	wr.Workflow = *w1
 	_, errS := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wr, &sdk.WorkflowRunPostHandlerOption{
@@ -278,7 +279,7 @@ func TestManualRun2(t *testing.T) {
 	}, consumer, nil)
 	require.NoError(t, errS)
 
-	wr2, errWR := workflow.CreateRun(db, w1, nil, u)
+	wr2, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 	assert.NoError(t, errWR)
 	wr2.Workflow = *w1
 	_, errS = workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wr2, &sdk.WorkflowRunPostHandlerOption{
@@ -372,6 +373,11 @@ func TestManualRun3(t *testing.T) {
 				Description: "here is a test",
 				Type:        sdk.IntegrationConfigTypeString,
 				Value:       "test",
+			},
+			"mypassword": sdk.IntegrationConfigValue{
+				Description: "here isa password",
+				Type:        sdk.IntegrationConfigTypePassword,
+				Value:       "mypassword",
 			},
 		},
 		Name:               sdk.RandomString(10),
@@ -537,8 +543,8 @@ func TestManualRun3(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	wr, errWR := workflow.CreateRun(db, w1, nil, u)
-	assert.NoError(t, errWR)
+	wr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
+	require.NoError(t, errWR)
 	wr.Workflow = *w1
 	_, errS := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wr, &sdk.WorkflowRunPostHandlerOption{
 		Manual: &sdk.WorkflowNodeRunManual{Username: u.Username},
@@ -572,7 +578,6 @@ queueRun:
 
 	for i := range jobs {
 		j := &jobs[i]
-		tx, _ := db.Begin()
 
 		t.Logf("##### work on job : %+v\n", j.Job.Action.Name)
 
@@ -583,11 +588,7 @@ queueRun:
 				ID:   1,
 			},
 		})
-		assert.NoError(t, err)
-		if t.Failed() {
-			tx.Rollback()
-			t.FailNow()
-		}
+		require.NoError(t, err)
 
 		sp := sdk.SpawnMsg{ID: sdk.MsgSpawnInfoHatcheryStarts.ID}
 		//AddSpawnInfosNodeJobRun
@@ -601,7 +602,6 @@ queueRun:
 		})
 		assert.NoError(t, err)
 		if t.Failed() {
-			tx.Rollback()
 			t.FailNow()
 		}
 
@@ -629,25 +629,9 @@ queueRun:
 			t.Fatal(err)
 		}
 
-		secrets, err := workflow.LoadSecrets(context.TODO(), db, cache, nodeRun, workflowRun, proj.Variables)
-		assert.NoError(t, err)
-		assert.Len(t, secrets, 1)
-
 		//TestAddLog
-		assert.NoError(t, workflow.AddLog(db, j, &sdk.Log{
-			Val: "This is a log",
-		}, workflow.DefaultMaxLogSize))
-		if t.Failed() {
-			tx.Rollback()
-			t.FailNow()
-		}
-		assert.NoError(t, workflow.AddLog(db, j, &sdk.Log{
-			Val: "This is another log",
-		}, workflow.DefaultMaxLogSize))
-		if t.Failed() {
-			tx.Rollback()
-			t.FailNow()
-		}
+		require.NoError(t, workflow.AppendLog(db, j.ID, j.WorkflowNodeRunID, 1, "This is a log", workflow.DefaultMaxLogSize))
+		require.NoError(t, workflow.AppendLog(db, j.ID, j.WorkflowNodeRunID, 1, "This is another log", workflow.DefaultMaxLogSize))
 
 		j, err = workflow.LoadNodeJobRun(context.TODO(), db, cache, j.ID)
 		require.NoError(t, err)
@@ -657,11 +641,7 @@ queueRun:
 
 		//TestUpdateNodeJobRunStatus
 		_, err = workflow.UpdateNodeJobRunStatus(context.TODO(), db, cache, *proj, j, sdk.StatusSuccess)
-		assert.NoError(t, err)
-		if t.Failed() {
-			tx.Rollback()
-			t.FailNow()
-		}
+		require.NoError(t, err)
 
 		workflowRun, err = workflow.LoadRunByID(db, wr.ID, workflow.LoadRunOptions{})
 		require.NoError(t, err)
@@ -688,14 +668,8 @@ queueRun:
 		}
 
 		logs, err := workflow.LoadLogs(db, takenJob.ID)
-		assert.NoError(t, err)
-		if t.Failed() {
-			tx.Rollback()
-			t.FailNow()
-		}
-		assert.NotEmpty(t, logs)
-
-		tx.Commit()
+		require.NoError(t, err)
+		require.NotEmpty(t, logs)
 
 		// check if there is another job to run
 		if takenJob.Job.Action.Name == "job10" {
@@ -878,7 +852,7 @@ func TestNoStage(t *testing.T) {
 	require.NoError(t, err)
 	consumer, _ := authentication.LoadConsumerByTypeAndUserID(context.TODO(), db, sdk.ConsumerLocal, u.ID, authentication.LoadConsumerOptions.WithAuthentifiedUser)
 
-	wr, errWR := workflow.CreateRun(db, w1, nil, u)
+	wr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 	assert.NoError(t, errWR)
 	wr.Workflow = *w1
 	_, errS := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wr, &sdk.WorkflowRunPostHandlerOption{
@@ -954,7 +928,7 @@ func TestNoJob(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	wr, errWR := workflow.CreateRun(db, w1, nil, u)
+	wr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 	assert.NoError(t, errWR)
 	wr.Workflow = *w1
 	_, errS := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wr, &sdk.WorkflowRunPostHandlerOption{

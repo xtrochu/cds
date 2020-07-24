@@ -114,9 +114,8 @@ func TestResyncCommitStatusNotifDisabled(t *testing.T) {
 			gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, 201, nil)
 
-	err = workflow.ResyncCommitStatus(ctx, db, cache, *proj, wr)
+	err = workflow.ResyncCommitStatus(ctx, db.DbMap, cache, *proj, wr)
 	assert.NoError(t, err)
-
 }
 
 // Test TestResyncCommitStatusSetStatus with a notification where all is disabled.
@@ -218,7 +217,7 @@ func TestResyncCommitStatusSetStatus(t *testing.T) {
 			gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, 201, nil)
 
-	err := workflow.ResyncCommitStatus(ctx, db, cache, *proj, wr)
+	err := workflow.ResyncCommitStatus(ctx, db.DbMap, cache, *proj, wr)
 	assert.NoError(t, err)
 }
 
@@ -335,7 +334,7 @@ func TestResyncCommitStatusCommentPR(t *testing.T) {
 			return nil, 200, nil
 		}).MaxTimes(1)
 
-	err := workflow.ResyncCommitStatus(ctx, db, cache, *proj, wr)
+	err := workflow.ResyncCommitStatus(ctx, db.DbMap, cache, *proj, wr)
 	assert.NoError(t, err)
 }
 
@@ -443,7 +442,7 @@ func TestResyncCommitStatusCommentPRNotTerminated(t *testing.T) {
 			return nil, 200, nil
 		}).MaxTimes(1)
 
-	err := workflow.ResyncCommitStatus(ctx, db, cache, *proj, wr)
+	err := workflow.ResyncCommitStatus(ctx, db.DbMap, cache, *proj, wr)
 	assert.NoError(t, err)
 }
 
@@ -569,6 +568,6 @@ func TestResyncCommitStatusCommitCache(t *testing.T) {
 			return nil, 200, nil
 		}).MaxTimes(1)
 	e := workflow.VCSEventMessenger{}
-	err := e.SendVCSEvent(ctx, db, cache, *proj, *wr, wr.WorkflowNodeRuns[1][0])
+	err := e.SendVCSEvent(ctx, db.DbMap, cache, *proj, *wr, wr.WorkflowNodeRuns[1][0])
 	assert.NoError(t, err)
 }

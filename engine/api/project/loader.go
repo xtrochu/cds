@@ -5,10 +5,9 @@ import (
 	"database/sql"
 
 	"github.com/go-gorp/gorp"
+
 	"github.com/ovh/cds/engine/api/application"
-	"github.com/ovh/cds/engine/api/cache"
 	"github.com/ovh/cds/engine/api/environment"
-	"github.com/ovh/cds/engine/api/feature"
 	"github.com/ovh/cds/engine/api/group"
 	"github.com/ovh/cds/engine/api/integration"
 	"github.com/ovh/cds/engine/api/pipeline"
@@ -34,6 +33,7 @@ var LoadOptions = struct {
 	WithGroups                              LoadOptionFunc
 	WithPermission                          LoadOptionFunc
 	WithApplicationVariables                LoadOptionFunc
+	WithApplicationKeys                     LoadOptionFunc
 	WithApplicationWithDeploymentStrategies LoadOptionFunc
 	WithKeys                                LoadOptionFunc
 	WithWorkflows                           LoadOptionFunc
@@ -42,7 +42,6 @@ var LoadOptions = struct {
 	WithIntegrations                        LoadOptionFunc
 	WithClearIntegrations                   LoadOptionFunc
 	WithFavorites                           func(uID string) LoadOptionFunc
-	WithFeatures                            func(store cache.Store) LoadOptionFunc
 	WithLabels                              LoadOptionFunc
 }{
 	Default:                                 loadDefault,
@@ -57,6 +56,7 @@ var LoadOptions = struct {
 	WithVariables:                           loadVariables,
 	WithVariablesWithClearPassword:          loadVariablesWithClearPassword,
 	WithApplicationVariables:                loadApplicationVariables,
+	WithApplicationKeys:                     loadApplicationKeys,
 	WithKeys:                                loadKeys,
 	WithWorkflows:                           loadWorkflows,
 	WithWorkflowNames:                       loadWorkflowNames,
@@ -64,7 +64,6 @@ var LoadOptions = struct {
 	WithIntegrations:                        loadIntegrations,
 	WithClearIntegrations:                   loadClearIntegrations,
 	WithFavorites:                           loadFavorites,
-	WithFeatures:                            loadFeatures,
 	WithApplicationWithDeploymentStrategies: loadApplicationWithDeploymentStrategies,
 	WithLabels:                              loadLabels,
 }
@@ -145,6 +144,22 @@ func loadApplicationVariables(db gorp.SqlExecutor, proj *sdk.Project) error {
 	return nil
 }
 
+func loadApplicationKeys(db gorp.SqlExecutor, proj *sdk.Project) error {
+	if proj.Applications == nil {
+		if err := loadApplications(db, proj); err != nil {
+			return sdk.WithStack(err)
+		}
+	}
+
+	for _, a := range proj.Applications {
+		if err := application.LoadOptions.WithKeys(context.TODO(), db, &a); err != nil {
+			return sdk.WithStack(err)
+		}
+	}
+
+	return nil
+}
+
 func loadKeys(db gorp.SqlExecutor, proj *sdk.Project) error {
 	keys, err := LoadAllKeys(db, proj.ID)
 	if err != nil {
@@ -170,14 +185,6 @@ func loadIntegrations(db gorp.SqlExecutor, proj *sdk.Project) error {
 	}
 	proj.Integrations = pf
 	return nil
-}
-
-func loadFeatures(store cache.Store) LoadOptionFunc {
-	return func(db gorp.SqlExecutor, proj *sdk.Project) error {
-		// Loads features into a project from the feature flipping provider
-		proj.Features = feature.GetFeatures(context.Background(), store, proj.Key)
-		return nil
-	}
 }
 
 func loadClearIntegrations(db gorp.SqlExecutor, proj *sdk.Project) error {

@@ -9,8 +9,6 @@ import (
 
 	"github.com/ovh/cds/engine/api/application"
 	"github.com/ovh/cds/engine/api/ascode"
-	"github.com/ovh/cds/engine/api/cache"
-	"github.com/ovh/cds/engine/api/event"
 	"github.com/ovh/cds/engine/api/operation"
 	"github.com/ovh/cds/engine/api/project"
 	"github.com/ovh/cds/engine/api/workflow"
@@ -18,26 +16,7 @@ import (
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/exportentities"
 	v2 "github.com/ovh/cds/sdk/exportentities/v2"
-	"github.com/ovh/cds/sdk/log"
 )
-
-func (api *API) getWorkflowAsCodeHandler() service.Handler {
-	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
-		vars := mux.Vars(r)
-		uuid := vars["uuid"]
-
-		var ope sdk.Operation
-		k := cache.Key(operation.CacheOperationKey, uuid)
-		b, err := api.Cache.Get(k, &ope)
-		if err != nil {
-			log.Error(ctx, "cannot get from cache %s: %v", k, err)
-		}
-		if !b {
-			return sdk.WithStack(sdk.ErrNotFound)
-		}
-		return service.WriteJSON(w, ope, http.StatusOK)
-	}
-}
 
 // postWorkflowAsCodeHandler update an ascode workflow, this will create a pull request to target repository.
 func (api *API) postWorkflowAsCodeHandler() service.Handler {
@@ -122,9 +101,19 @@ func (api *API) postWorkflowAsCodeHandler() service.Handler {
 			return err
 		}
 
-		ope, err := operation.PushOperationUpdate(ctx, api.mustDB(), api.Cache, *p, data, rootApp.VCSServer, rootApp.RepositoryFullname, branch, message, rootApp.RepositoryStrategy, u)
+		tx, err := api.mustDB().Begin()
+		if err != nil {
+			return sdk.WithStack(err)
+		}
+		defer tx.Rollback() // nolint
+
+		ope, err := operation.PushOperationUpdate(ctx, tx, api.Cache, *p, data, rootApp.VCSServer, rootApp.RepositoryFullname, branch, message, rootApp.RepositoryStrategy, u)
 		if err != nil {
 			return err
+		}
+
+		if err := tx.Commit(); err != nil {
+			return sdk.WithStack(err)
 		}
 
 		sdk.GoRoutine(context.Background(), fmt.Sprintf("UpdateAsCodeResult-%s", ope.UUID), func(ctx context.Context) {
@@ -135,13 +124,13 @@ func (api *API) postWorkflowAsCodeHandler() service.Handler {
 				FromRepo:      wfDB.FromRepository,
 				OperationUUID: ope.UUID,
 			}
-			asCodeEvent := ascode.UpdateAsCodeResult(ctx, api.mustDB(), api.Cache, *p, wfDB.ID, *rootApp, ed, u)
-			if asCodeEvent != nil {
-				event.PublishAsCodeEvent(ctx, p.Key, *asCodeEvent, u)
-			}
+			ascode.UpdateAsCodeResult(ctx, api.mustDB(), api.Cache, *p, *wfDB, *rootApp, ed, u)
 		}, api.PanicDump())
 
-		return service.WriteJSON(w, ope, http.StatusOK)
+		return service.WriteJSON(w, sdk.Operation{
+			UUID:   ope.UUID,
+			Status: ope.Status,
+		}, http.StatusOK)
 	}
 }
 
@@ -151,6 +140,12 @@ func (api *API) migrateWorkflowAsCode(ctx context.Context, w http.ResponseWriter
 	if wf.FromRepository != "" || (wf.FromRepository == "" && len(wf.AsCodeEvent) > 0) {
 		return sdk.WithStack(sdk.ErrWorkflowAlreadyAsCode)
 	}
+
+	tx, err := api.mustDB().Begin()
+	if err != nil {
+		return sdk.WithStack(err)
+	}
+	defer tx.Rollback() // nolint
 
 	// Check if there is a repository web hook
 	found := false
@@ -167,19 +162,23 @@ func (api *API) migrateWorkflowAsCode(ctx context.Context, w http.ResponseWriter
 		}
 		wf.WorkflowData.Node.Hooks = append(wf.WorkflowData.Node.Hooks, h)
 
-		if err := workflow.Update(ctx, api.mustDB(), api.Cache, proj, wf, workflow.UpdateOptions{}); err != nil {
+		if err := workflow.Update(ctx, tx, api.Cache, proj, wf, workflow.UpdateOptions{}); err != nil {
 			return err
 		}
 	}
 
-	data, err := workflow.Pull(ctx, api.mustDB(), api.Cache, proj, wf.Name, project.EncryptWithBuiltinKey, v2.WorkflowSkipIfOnlyOneRepoWebhook)
+	data, err := workflow.Pull(ctx, tx, api.Cache, proj, wf.Name, project.EncryptWithBuiltinKey, v2.WorkflowSkipIfOnlyOneRepoWebhook)
 	if err != nil {
 		return err
 	}
 
-	ope, err := operation.PushOperation(ctx, api.mustDB(), api.Cache, proj, data, app.VCSServer, app.RepositoryFullname, branch, message, app.RepositoryStrategy, u)
+	ope, err := operation.PushOperation(ctx, tx, api.Cache, proj, data, app.VCSServer, app.RepositoryFullname, branch, message, app.RepositoryStrategy, u)
 	if err != nil {
 		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return sdk.WithStack(err)
 	}
 
 	sdk.GoRoutine(context.Background(), fmt.Sprintf("MigrateWorkflowAsCodeResult-%s", ope.UUID), func(ctx context.Context) {
@@ -190,11 +189,11 @@ func (api *API) migrateWorkflowAsCode(ctx context.Context, w http.ResponseWriter
 			Name:          wf.Name,
 			OperationUUID: ope.UUID,
 		}
-		asCodeEvent := ascode.UpdateAsCodeResult(ctx, api.mustDB(), api.Cache, proj, wf.ID, app, ed, u)
-		if asCodeEvent != nil {
-			event.PublishAsCodeEvent(ctx, proj.Key, *asCodeEvent, u)
-		}
+		ascode.UpdateAsCodeResult(ctx, api.mustDB(), api.Cache, proj, *wf, app, ed, u)
 	}, api.PanicDump())
 
-	return service.WriteJSON(w, ope, http.StatusOK)
+	return service.WriteJSON(w, sdk.Operation{
+		UUID:   ope.UUID,
+		Status: ope.Status,
+	}, http.StatusOK)
 }

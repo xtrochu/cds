@@ -11,11 +11,11 @@ import (
 	"github.com/ovh/venom"
 
 	"github.com/ovh/cds/engine/api/cache"
-	"github.com/ovh/cds/engine/api/database/gorpmapping"
-	"github.com/ovh/cds/engine/api/observability"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
 	"github.com/ovh/cds/sdk"
+	"github.com/ovh/cds/sdk/gorpmapping"
 	"github.com/ovh/cds/sdk/log"
+	"github.com/ovh/cds/sdk/telemetry"
 )
 
 const nodeRunFields string = `
@@ -168,7 +168,7 @@ func LoadNodeRunByNodeJobID(db gorp.SqlExecutor, nodeJobRunID int64, loadOpts Lo
 //LoadAndLockNodeRunByID load and lock a specific node run on a workflow
 func LoadAndLockNodeRunByID(ctx context.Context, db gorp.SqlExecutor, id int64) (*sdk.WorkflowNodeRun, error) {
 	var end func()
-	_, end = observability.Span(ctx, "workflow.LoadAndLockNodeRunByID")
+	_, end = telemetry.Span(ctx, "workflow.LoadAndLockNodeRunByID")
 	defer end()
 
 	var rr = NodeRun{}
@@ -538,7 +538,7 @@ func UpdateNodeRun(db gorp.SqlExecutor, n *sdk.WorkflowNodeRun) error {
 }
 
 // GetNodeRunBuildCommits gets commits for given node run and return current vcs info
-func GetNodeRunBuildCommits(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, wf *sdk.Workflow, wNodeName string, number int64, nodeRun *sdk.WorkflowNodeRun, app *sdk.Application, env *sdk.Environment) ([]sdk.VCSCommit, sdk.BuildNumberAndHash, error) {
+func GetNodeRunBuildCommits(ctx context.Context, db gorpmapping.SqlExecutorWithTx, store cache.Store, proj sdk.Project, wf *sdk.Workflow, wNodeName string, number int64, nodeRun *sdk.WorkflowNodeRun, app *sdk.Application, env *sdk.Environment) ([]sdk.VCSCommit, sdk.BuildNumberAndHash, error) {
 	var cur sdk.BuildNumberAndHash
 	if app == nil {
 		log.Debug("GetNodeRunBuildCommits> No app linked")

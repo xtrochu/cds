@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-gorp/gorp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/ovh/cds/engine/api/worker"
 	"github.com/ovh/cds/engine/api/workermodel"
 	"github.com/ovh/cds/sdk"
+	"github.com/ovh/cds/sdk/gorpmapping"
 )
 
 func TestInsertAndUpdate_WithRegistryPassword(t *testing.T) {
@@ -95,7 +95,7 @@ func TestInsertAndUpdate_WithRegistryPassword(t *testing.T) {
 	require.Error(t, err)
 }
 
-func insertWorkerModel(t *testing.T, db gorp.SqlExecutor, name string, groupID int64, req ...sdk.Requirement) *sdk.Model {
+func insertWorkerModel(t *testing.T, db gorpmapping.SqlExecutorWithTx, name string, groupID int64, req ...sdk.Requirement) *sdk.Model {
 	m := sdk.Model{
 		Name: name,
 		Type: sdk.Docker,
@@ -133,6 +133,29 @@ func TestInsert(t *testing.T) {
 	res.Group = nil
 
 	assert.EqualValues(t, *src, *res)
+}
+
+func TestMergeModelEnvsWithDefaultEnvs(t *testing.T) {
+	db, _ := test.SetupPG(t, bootstrap.InitiliazeDB)
+
+	g := assets.InsertGroup(t, db)
+
+	m := sdk.Model{
+		Name: sdk.RandomString(10),
+		Type: sdk.Docker,
+		ModelDocker: sdk.ModelDocker{
+			Image: "foo/bar:3.4",
+		},
+		GroupID: g.ID,
+	}
+	require.NoError(t, workermodel.Insert(context.TODO(), db, &m))
+	require.Len(t, m.ModelDocker.Envs, 6, "all default vars should be added by insert")
+
+	m.ModelDocker.Envs = map[string]string{
+		"myvar": "myvalue",
+	}
+	require.NoError(t, workermodel.UpdateDB(context.TODO(), db, &m))
+	require.Len(t, m.ModelDocker.Envs, 7, "all default vars should be merged to given vars by update")
 }
 
 func TestLoadByNameAndGroupID(t *testing.T) {

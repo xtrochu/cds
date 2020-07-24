@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/go-gorp/gorp"
 	"github.com/golang/mock/gomock"
+	"github.com/ovh/cds/engine/api/event"
 	"github.com/ovh/cds/engine/api/pipeline"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
 	"github.com/ovh/cds/engine/api/services"
@@ -30,17 +32,17 @@ import (
 )
 
 func Test_postApplicationMetadataHandler_AsProvider(t *testing.T) {
-	api, tsURL := newTestServer(t)
+	api, db, tsURL := newTestServer(t)
 
-	u, _ := assets.InsertAdminUser(t, api.mustDB())
+	u, _ := assets.InsertAdminUser(t, db)
 	localConsumer, err := authentication.LoadConsumerByTypeAndUserID(context.TODO(), api.mustDB(), sdk.ConsumerLocal, u.ID, authentication.LoadConsumerOptions.WithAuthentifiedUser)
 	require.NoError(t, err)
-	_, jws, err := builtin.NewConsumer(context.TODO(), api.mustDB(), sdk.RandomString(10), sdk.RandomString(10), localConsumer, u.GetGroupIDs(),
+	_, jws, err := builtin.NewConsumer(context.TODO(), db, sdk.RandomString(10), sdk.RandomString(10), localConsumer, u.GetGroupIDs(),
 		sdk.NewAuthConsumerScopeDetails(sdk.AuthConsumerScopeProject))
 
 	pkey := sdk.RandomString(10)
-	proj := assets.InsertTestProject(t, api.mustDB(), api.Cache, pkey, pkey)
-	require.NoError(t, group.InsertLinkGroupUser(context.TODO(), api.mustDB(), &group.LinkGroupUser{
+	proj := assets.InsertTestProject(t, db, api.Cache, pkey, pkey)
+	require.NoError(t, group.InsertLinkGroupUser(context.TODO(), db, &group.LinkGroupUser{
 		GroupID:            proj.ProjectGroups[0].Group.ID,
 		AuthentifiedUserID: u.ID,
 		Admin:              true,
@@ -53,7 +55,7 @@ func Test_postApplicationMetadataHandler_AsProvider(t *testing.T) {
 			"a1": "a1",
 		},
 	}
-	require.NoError(t, application.Insert(api.mustDB(), proj.ID, app))
+	require.NoError(t, application.Insert(db, proj.ID, app))
 
 	sdkclient := cdsclient.NewProviderClient(cdsclient.ProviderConfig{
 		Host:  tsURL,
@@ -72,9 +74,17 @@ func Test_postApplicationMetadataHandler_AsProvider(t *testing.T) {
 }
 
 func TestUpdateAsCodeApplicationHandler(t *testing.T) {
-	api, db, _ := newTestAPI(t)
+	api, db, tsURL := newTestServer(t)
+	require.NoError(t, event.Initialize(context.Background(), api.mustDB(), api.Cache))
 
-	u, pass := assets.InsertAdminUser(t, db)
+	u, jwt := assets.InsertAdminUser(t, db)
+
+	client := cdsclient.New(cdsclient.Config{
+		Host:                  tsURL,
+		User:                  u.Username,
+		InsecureSkipVerifyTLS: true,
+		SessionToken:          jwt,
+	})
 
 	UUID := sdk.UUID()
 
@@ -84,9 +94,9 @@ func TestUpdateAsCodeApplicationHandler(t *testing.T) {
 		_ = services.Delete(db, &s) // nolint
 	}
 
-	_, _ = assets.InsertService(t, db, t.Name()+"_HOOKS", services.TypeHooks)
-	_, _ = assets.InsertService(t, db, t.Name()+"_VCS", services.TypeVCS)
-	_, _ = assets.InsertService(t, db, t.Name()+"_REPO", services.TypeRepositories)
+	_, _ = assets.InsertService(t, db, t.Name()+"_HOOKS", sdk.TypeHooks)
+	_, _ = assets.InsertService(t, db, t.Name()+"_VCS", sdk.TypeVCS)
+	_, _ = assets.InsertService(t, db, t.Name()+"_REPO", sdk.TypeRepositories)
 
 	// Setup a mock for all services called by the API
 	ctrl := gomock.NewController(t)
@@ -152,6 +162,7 @@ func TestUpdateAsCodeApplicationHandler(t *testing.T) {
 		DoAndReturn(func(ctx context.Context, method, path string, _ interface{}, in interface{}, out interface{}) (int, error) {
 			ope := new(sdk.Operation)
 			ope.UUID = UUID
+			ope.Status = sdk.OperationStatusPending
 			*(out.(*sdk.Operation)) = *ope
 			return 200, nil
 		}).Times(1)
@@ -196,7 +207,7 @@ func TestUpdateAsCodeApplicationHandler(t *testing.T) {
 			},
 		).Times(1)
 
-	assert.NoError(t, workflow.CreateBuiltinWorkflowHookModels(db))
+	assert.NoError(t, workflow.CreateBuiltinWorkflowHookModels(api.mustDB()))
 
 	// Create Project
 	pkey := sdk.RandomString(10)
@@ -241,11 +252,20 @@ func TestUpdateAsCodeApplicationHandler(t *testing.T) {
 	wk.FromRepository = "myrepofrom"
 	require.NoError(t, workflow.Insert(context.Background(), db, api.Cache, *proj, wk))
 
+	chanMessageReceived := make(chan sdk.WebsocketEvent)
+	chanMessageToSend := make(chan []sdk.WebsocketFilter)
+	go client.WebsocketEventsListen(context.TODO(), chanMessageToSend, chanMessageReceived)
+	chanMessageToSend <- []sdk.WebsocketFilter{{
+		Type:         sdk.WebsocketFilterTypeAscodeEvent,
+		ProjectKey:   proj.Key,
+		WorkflowName: wk.Name,
+	}}
+
 	uri := api.Router.GetRoute("PUT", api.updateAsCodeApplicationHandler, map[string]string{
 		"permProjectKey":  proj.Key,
 		"applicationName": app.Name,
 	})
-	req := assets.NewJWTAuthentifiedRequest(t, pass, "PUT", uri, app)
+	req := assets.NewJWTAuthentifiedRequest(t, jwt, "PUT", uri, app)
 	q := req.URL.Query()
 	q.Set("branch", "master")
 	q.Set("message", "my message")
@@ -259,36 +279,14 @@ func TestUpdateAsCodeApplicationHandler(t *testing.T) {
 	test.NoError(t, json.Unmarshal(wr.Body.Bytes(), myOpe))
 	assert.NotEmpty(t, myOpe.UUID)
 
-	cpt := 0
-	for {
-		if cpt >= 10 {
-			t.Fail()
-			return
-		}
-
-		// Get operation
-		uriGET := api.Router.GetRoute("GET", api.getWorkflowAsCodeHandler, map[string]string{
-			"key":              proj.Key,
-			"permWorkflowName": wk.Name,
-			"uuid":             myOpe.UUID,
-		})
-		reqGET, err := http.NewRequest("GET", uriGET, nil)
-		test.NoError(t, err)
-		assets.AuthentifyRequest(t, reqGET, u, pass)
-		wrGet := httptest.NewRecorder()
-		api.Router.Mux.ServeHTTP(wrGet, reqGET)
-		assert.Equal(t, 200, wrGet.Code)
-		myOpeGet := new(sdk.Operation)
-		err = json.Unmarshal(wrGet.Body.Bytes(), myOpeGet)
-		assert.NoError(t, err)
-
-		if myOpeGet.Status < sdk.OperationStatusDone {
-			cpt++
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		test.NoError(t, json.Unmarshal(wrGet.Body.Bytes(), myOpeGet))
-		assert.Equal(t, "myURL", myOpeGet.Setup.Push.PRLink)
-		break
+	timeout := time.NewTimer(5 * time.Second)
+	select {
+	case <-timeout.C:
+		t.Fatal("test timeout")
+	case evt := <-chanMessageReceived:
+		require.Equal(t, fmt.Sprintf("%T", sdk.EventAsCodeEvent{}), evt.Event.EventType)
+		var ae sdk.EventAsCodeEvent
+		require.NoError(t, json.Unmarshal(evt.Event.Payload, &ae))
+		require.Equal(t, "myURL", ae.Event.PullRequestURL)
 	}
 }

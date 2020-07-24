@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { Select, Store } from '@ngxs/store';
 import { ProjectIntegration } from 'app/model/integration.model';
@@ -24,7 +24,7 @@ import { Subscription } from 'rxjs/Subscription';
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 @AutoUnsubscribe()
-export class WorkflowNodeHookFormComponent implements OnInit {
+export class WorkflowNodeHookFormComponent implements OnInit, OnDestroy {
 
     @Input() workflow: Workflow;
 
@@ -72,6 +72,8 @@ export class WorkflowNodeHookFormComponent implements OnInit {
         this.editMode = this._store.selectSnapshot(WorkflowState).editMode;
     }
 
+    ngOnDestroy(): void {} // Should be set to use @AutoUnsubscribe with AOT
+
     ngOnInit(): void {
         this.nodeSub = this.node$.subscribe(n => {
             this.node = n;
@@ -106,7 +108,7 @@ export class WorkflowNodeHookFormComponent implements OnInit {
             }
         });
 
-        this.availableIntegrations = this.project.integrations.filter(pf => pf.model.hook);
+        this.availableIntegrations = this.project.integrations?.filter(pf => pf.model.hook);
         if (this.hook && this.hook.config && this.hook.config['integration']) {
             this.selectedIntegration = this.project.integrations.find(pf => pf.name === this.hook.config['integration'].value);
         }

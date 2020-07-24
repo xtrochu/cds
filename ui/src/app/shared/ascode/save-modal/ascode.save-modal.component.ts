@@ -1,8 +1,11 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, ViewChild } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
+import { Store } from '@ngxs/store';
 import { ModalTemplate, SuiActiveModal, SuiModalService, TemplateModalConfig } from '@richardlt/ng2-semantic-ui';
+import { EventService } from 'app/event.service';
 import { Application } from 'app/model/application.model';
 import { Environment } from 'app/model/environment.model';
+import { EventType } from 'app/model/event.model';
 import { Operation } from 'app/model/operation.model';
 import { Pipeline } from 'app/model/pipeline.model';
 import { Project } from 'app/model/project.model';
@@ -13,7 +16,8 @@ import { PipelineService } from 'app/service/pipeline/pipeline.service';
 import { WorkflowService } from 'app/service/workflow/workflow.service';
 import { AutoUnsubscribe } from 'app/shared/decorator/autoUnsubscribe';
 import { ToastService } from 'app/shared/toast/ToastService';
-import { Observable, Subscription } from 'rxjs';
+import { EventState } from 'app/store/event.state';
+import { Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { ParamData } from '../save-form/ascode.save-form.component';
 
@@ -23,7 +27,7 @@ import { ParamData } from '../save-form/ascode.save-form.component';
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 @AutoUnsubscribe()
-export class AsCodeSaveModalComponent {
+export class AsCodeSaveModalComponent implements OnDestroy {
     @ViewChild('updateAsCodeModal')
     public myModalTemplate: ModalTemplate<boolean, boolean, void>;
     modal: SuiActiveModal<boolean, boolean, void>;
@@ -51,8 +55,12 @@ export class AsCodeSaveModalComponent {
         private _workflowService: WorkflowService,
         private _pipService: PipelineService,
         private _appService: ApplicationService,
+        private _store: Store,
+        private _eventService: EventService,
         private _envService: EnvironmentService
     ) { }
+
+    ngOnDestroy(): void {} // Should be set to use @AutoUnsubscribe with AOT
 
     show(data: any, type: string) {
         this.loading = false;
@@ -86,7 +94,7 @@ export class AsCodeSaveModalComponent {
                 this._workflowService.updateAsCode(this.project.key, this.name, this.parameters.branch_name,
                     this.parameters.commit_message, this.dataToSave as Workflow).subscribe(o => {
                         this.asCodeOperation = o;
-                        this.startPollingOperation(this.name);
+                        this.startPollingOperation();
                     });
                 break;
             case 'pipeline':
@@ -95,7 +103,7 @@ export class AsCodeSaveModalComponent {
                 this._pipService.updateAsCode(this.project.key, <Pipeline>this.dataToSave,
                     this.parameters.branch_name, this.parameters.commit_message).subscribe(o => {
                         this.asCodeOperation = o;
-                        this.startPollingOperation((<Pipeline>this.dataToSave).workflow_ascode_holder.name);
+                        this.startPollingOperation();
                     });
                 break;
             case 'application':
@@ -103,9 +111,9 @@ export class AsCodeSaveModalComponent {
                 this._cd.markForCheck();
                 this._appService.updateAsCode(this.project.key, this.name, <Application>this.dataToSave,
                     this.parameters.branch_name, this.parameters.commit_message).subscribe(o => {
-                    this.asCodeOperation = o;
-                    this.startPollingOperation((<Application>this.dataToSave).workflow_ascode_holder.name);
-                });
+                        this.asCodeOperation = o;
+                        this.startPollingOperation();
+                    });
                 break;
             case 'environment':
                 this.loading = true;
@@ -113,7 +121,7 @@ export class AsCodeSaveModalComponent {
                 this._envService.updateAsCode(this.project.key, this.name, <Environment>this.dataToSave,
                     this.parameters.branch_name, this.parameters.commit_message).subscribe(o => {
                     this.asCodeOperation = o;
-                    this.startPollingOperation((<Environment>this.dataToSave).workflow_ascode_holder.name);
+                    this.startPollingOperation();
                 });
                 break;
             default:
@@ -121,9 +129,11 @@ export class AsCodeSaveModalComponent {
         }
     }
 
-    startPollingOperation(workflowName: string) {
-        this.pollingOperationSub = Observable.interval(1000)
-            .mergeMap(_ => this._workflowService.getAsCodeOperation(this.project.key, workflowName, this.asCodeOperation.uuid))
+    startPollingOperation() {
+        this.pollingOperationSub = this._store.select(EventState.last)
+            .filter(e => e && e.type_event === EventType.OPERATION && e.project_key === this.project.key)
+            .map(e => e.payload as Operation)
+            .filter(o => o.uuid === this.asCodeOperation.uuid)
             .first(o => o.status > 1)
             .pipe(finalize(() => {
                 this.loading = false;
@@ -133,6 +143,7 @@ export class AsCodeSaveModalComponent {
                 this.asCodeOperation = o;
                 this.displayCloseButton = true;
             });
+        this._eventService.subscribeToOperation(this.project.key, this.asCodeOperation.uuid);
     }
 
     onParamChange(param: ParamData): void {

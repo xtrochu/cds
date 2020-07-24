@@ -4,21 +4,19 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"fmt"
 	"path/filepath"
-	"time"
 
 	"github.com/fsamin/go-dump"
 	"github.com/go-gorp/gorp"
 
 	"github.com/ovh/cds/engine/api/cache"
 	"github.com/ovh/cds/engine/api/keys"
-	"github.com/ovh/cds/engine/api/observability"
 	"github.com/ovh/cds/engine/api/operation"
 	"github.com/ovh/cds/engine/api/workflowtemplate"
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/exportentities"
 	"github.com/ovh/cds/sdk/log"
+	"github.com/ovh/cds/sdk/telemetry"
 )
 
 // WorkflowAsCodePattern is the default code pattern to find cds files
@@ -39,22 +37,22 @@ type PushOption struct {
 
 // CreateFromRepository a workflow from a repository.
 func CreateFromRepository(ctx context.Context, db *gorp.DbMap, store cache.Store, p *sdk.Project, wf *sdk.Workflow,
-	opts sdk.WorkflowRunPostHandlerOption, u sdk.AuthConsumer, decryptFunc keys.DecryptFunc) ([]sdk.Message, error) {
-	ctx, end := observability.Span(ctx, "workflow.CreateFromRepository")
+	opts sdk.WorkflowRunPostHandlerOption, u sdk.AuthConsumer, decryptFunc keys.DecryptFunc) (*PushSecrets, []sdk.Message, error) {
+	ctx, end := telemetry.Span(ctx, "workflow.CreateFromRepository")
 	defer end()
 
 	newOperation, err := createOperationRequest(*wf, opts)
 	if err != nil {
-		return nil, sdk.WrapError(err, "unable to create operation request")
+		return nil, nil, sdk.WrapError(err, "unable to create operation request")
 	}
 
 	if err := operation.PostRepositoryOperation(ctx, db, *p, &newOperation, nil); err != nil {
-		return nil, sdk.WrapError(err, "unable to post repository operation")
+		return nil, nil, sdk.WrapError(err, "unable to post repository operation")
 	}
 
-	ope, err := pollRepositoryOperation(ctx, db, store, newOperation.UUID)
+	ope, err := operation.Poll(ctx, db, newOperation.UUID)
 	if err != nil {
-		return nil, sdk.WrapError(err, "cannot analyse repository")
+		return nil, nil, sdk.WrapError(err, "cannot analyse repository")
 	}
 
 	var uuid string
@@ -73,15 +71,15 @@ func CreateFromRepository(ctx context.Context, db *gorp.DbMap, store cache.Store
 }
 
 func extractWorkflow(ctx context.Context, db *gorp.DbMap, store cache.Store, p *sdk.Project, wf *sdk.Workflow,
-	ope sdk.Operation, consumer sdk.AuthConsumer, decryptFunc keys.DecryptFunc, hookUUID string) ([]sdk.Message, error) {
-	ctx, end := observability.Span(ctx, "workflow.extractWorkflow")
+	ope sdk.Operation, consumer sdk.AuthConsumer, decryptFunc keys.DecryptFunc, hookUUID string) (*PushSecrets, []sdk.Message, error) {
+	ctx, end := telemetry.Span(ctx, "workflow.extractWorkflow")
 	defer end()
 	var allMsgs []sdk.Message
 	// Read files
 	tr, err := ReadCDSFiles(ope.LoadFiles.Results)
 	if err != nil {
 		allMsgs = append(allMsgs, sdk.NewMessage(sdk.MsgWorkflowErrorBadCdsDir))
-		return allMsgs, sdk.NewErrorWithStack(err, sdk.NewErrorFrom(sdk.ErrWorkflowInvalid, "unable to read cds files"))
+		return nil, allMsgs, sdk.NewErrorWithStack(err, sdk.NewErrorFrom(sdk.ErrWorkflowInvalid, "unable to read cds files"))
 	}
 	ope.RepositoryStrategy.SSHKeyContent = sdk.PasswordPlaceholder
 	ope.RepositoryStrategy.Password = sdk.PasswordPlaceholder
@@ -98,7 +96,7 @@ func extractWorkflow(ctx context.Context, db *gorp.DbMap, store cache.Store, p *
 
 	data, err := exportentities.UntarWorkflowComponents(ctx, tr)
 	if err != nil {
-		return allMsgs, err
+		return nil, allMsgs, err
 	}
 
 	mods := []workflowtemplate.TemplateRequestModifierFunc{
@@ -108,14 +106,14 @@ func extractWorkflow(ctx context.Context, db *gorp.DbMap, store cache.Store, p *
 		mods = append(mods, workflowtemplate.TemplateRequestModifiers.Detached)
 	}
 	if opt.FromRepository != "" {
-		mods = append(mods, workflowtemplate.TemplateRequestModifiers.DefaultNameAndRepositories(ctx, db, store, *p, opt.FromRepository))
+		mods = append(mods, workflowtemplate.TemplateRequestModifiers.DefaultNameAndRepositories(*p, opt.FromRepository))
 	}
-	msgTemplate, wti, err := workflowtemplate.CheckAndExecuteTemplate(ctx, db, consumer, *p, &data, mods...)
+	msgTemplate, wti, err := workflowtemplate.CheckAndExecuteTemplate(ctx, db, store, consumer, *p, &data, mods...)
 	allMsgs = append(allMsgs, msgTemplate...)
 	if err != nil {
-		return allMsgs, err
+		return nil, allMsgs, err
 	}
-	msgPush, workflowPushed, _, err := Push(ctx, db, store, p, data, opt, consumer, decryptFunc)
+	msgPush, workflowPushed, _, secrets, err := Push(ctx, db, store, p, data, opt, consumer, decryptFunc)
 	// Filter workflow push message if generated from template
 	for i := range msgPush {
 		if wti != nil && msgPush[i].ID == sdk.MsgWorkflowDeprecatedVersion.ID {
@@ -124,10 +122,10 @@ func extractWorkflow(ctx context.Context, db *gorp.DbMap, store cache.Store, p *
 		allMsgs = append(allMsgs, msgPush[i])
 	}
 	if err != nil {
-		return allMsgs, sdk.WrapError(err, "unable to get workflow from file")
+		return nil, allMsgs, sdk.WrapError(err, "unable to get workflow from file")
 	}
 	if err := workflowtemplate.UpdateTemplateInstanceWithWorkflow(ctx, db, *workflowPushed, consumer, wti); err != nil {
-		return allMsgs, err
+		return nil, allMsgs, err
 	}
 	*wf = *workflowPushed
 
@@ -135,7 +133,7 @@ func extractWorkflow(ctx context.Context, db *gorp.DbMap, store cache.Store, p *
 		log.Debug("workflow.extractWorkflow> Workflow has been renamed from %s to %s", wf.Name, workflowPushed.Name)
 	}
 
-	return allMsgs, nil
+	return secrets, allMsgs, nil
 }
 
 // ReadCDSFiles reads CDS files
@@ -165,37 +163,6 @@ func ReadCDSFiles(files map[string][]byte) (*tar.Reader, error) {
 	}
 
 	return tar.NewReader(buf), nil
-}
-
-func pollRepositoryOperation(c context.Context, db gorp.SqlExecutor, store cache.Store, operationUUID string) (*sdk.Operation, error) {
-	tickTimeout := time.NewTicker(10 * time.Minute)
-	tickPoll := time.NewTicker(2 * time.Second)
-	defer tickTimeout.Stop()
-	for {
-		select {
-		case <-c.Done():
-			if c.Err() != nil {
-				return nil, sdk.WrapError(c.Err(), "exiting")
-			}
-		case <-tickTimeout.C:
-			return nil, sdk.WrapError(sdk.ErrRepoOperationTimeout, "timeout analyzing repository")
-		case <-tickPoll.C:
-			ope, err := operation.GetRepositoryOperation(c, db, operationUUID)
-			if err != nil {
-				return nil, sdk.WrapError(err, "cannot get repository operation status")
-			}
-			switch ope.Status {
-			case sdk.OperationStatusError:
-				opeTrusted := *ope
-				opeTrusted.RepositoryStrategy.SSHKeyContent = sdk.PasswordPlaceholder
-				opeTrusted.RepositoryStrategy.Password = sdk.PasswordPlaceholder
-				return nil, sdk.WrapError(fmt.Errorf("%+v", ope.Error), "operation in error: %+v", opeTrusted)
-			case sdk.OperationStatusDone:
-				return ope, nil
-			}
-			continue
-		}
-	}
 }
 
 func createOperationRequest(w sdk.Workflow, opts sdk.WorkflowRunPostHandlerOption) (sdk.Operation, error) {

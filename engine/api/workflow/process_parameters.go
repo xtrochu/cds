@@ -6,14 +6,13 @@ import (
 	"strings"
 
 	"github.com/fsamin/go-dump"
-	"github.com/go-gorp/gorp"
 
-	"github.com/ovh/cds/engine/api/observability"
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/interpolate"
+	"github.com/ovh/cds/sdk/telemetry"
 )
 
-func getNodeJobRunParameters(db gorp.SqlExecutor, j sdk.Job, run *sdk.WorkflowNodeRun, stage *sdk.Stage) ([]sdk.Parameter, *sdk.MultiError) {
+func getNodeJobRunParameters(j sdk.Job, run *sdk.WorkflowNodeRun, stage *sdk.Stage) ([]sdk.Parameter, *sdk.MultiError) {
 	params := run.BuildParameters
 	tmp := map[string]string{
 		"cds.stage": stage.Name,
@@ -44,10 +43,20 @@ func getBuildParameterFromNodeContext(proj sdk.Project, w *sdk.Workflow, runCont
 		vars[k] = v
 	}
 
+	tmpProj = sdk.ParametersFromProjectKeys(proj)
+	for k, v := range tmpProj {
+		vars[k] = v
+	}
+
 	// COMPUTE APPLICATION VARIABLE
 	if runContext.Application.ID != 0 {
 		vars["cds.application"] = runContext.Application.Name
 		tmp := sdk.ParametersFromApplicationVariables(runContext.Application)
+		for k, v := range tmp {
+			vars[k] = v
+		}
+
+		tmp = sdk.ParametersFromApplicationKeys(runContext.Application)
 		for k, v := range tmp {
 			vars[k] = v
 		}
@@ -57,6 +66,10 @@ func getBuildParameterFromNodeContext(proj sdk.Project, w *sdk.Workflow, runCont
 	if runContext.Environment.ID != 0 {
 		vars["cds.environment"] = runContext.Environment.Name
 		tmp := sdk.ParametersFromEnvironmentVariables(runContext.Environment)
+		for k, v := range tmp {
+			vars[k] = v
+		}
+		tmp = sdk.ParametersFromEnvironmentKeys(runContext.Environment)
 		for k, v := range tmp {
 			vars[k] = v
 		}
@@ -199,10 +212,10 @@ func getParentParameters(w *sdk.WorkflowRun, nodeRuns []*sdk.WorkflowNodeRun) ([
 }
 
 func getNodeRunBuildParameters(ctx context.Context, proj sdk.Project, wr *sdk.WorkflowRun, run *sdk.WorkflowNodeRun, runContext nodeRunContext) ([]sdk.Parameter, error) {
-	ctx, end := observability.Span(ctx, "workflow.getNodeRunBuildParameters",
-		observability.Tag(observability.TagWorkflow, wr.Workflow.Name),
-		observability.Tag(observability.TagWorkflowRun, wr.Number),
-		observability.Tag(observability.TagWorkflowNodeRun, run.ID),
+	ctx, end := telemetry.Span(ctx, "workflow.getNodeRunBuildParameters",
+		telemetry.Tag(telemetry.TagWorkflow, wr.Workflow.Name),
+		telemetry.Tag(telemetry.TagWorkflowRun, wr.Number),
+		telemetry.Tag(telemetry.TagWorkflowNodeRun, run.ID),
 	)
 	defer end()
 
@@ -224,7 +237,7 @@ func getNodeRunBuildParameters(ctx context.Context, proj sdk.Project, wr *sdk.Wo
 		tmp["cds.template.version"] = fmt.Sprintf("%d", wr.Workflow.TemplateInstance.WorkflowTemplateVersion)
 	}
 
-	_, next := observability.Span(ctx, "workflow.interpolate")
+	_, next := telemetry.Span(ctx, "workflow.interpolate")
 	params = make([]sdk.Parameter, 0, len(tmp))
 	for k, v := range tmp {
 		s, err := interpolate.Do(v, tmp)

@@ -10,10 +10,10 @@ import (
 	"github.com/go-gorp/gorp"
 
 	"github.com/ovh/cds/engine/api/cache"
-	"github.com/ovh/cds/engine/api/observability"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
 	"github.com/ovh/cds/sdk"
 	"github.com/ovh/cds/sdk/log"
+	"github.com/ovh/cds/sdk/telemetry"
 )
 
 type VCSEventMessenger struct {
@@ -22,10 +22,10 @@ type VCSEventMessenger struct {
 }
 
 // ResyncCommitStatus resync commit status for a workflow run
-func ResyncCommitStatus(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, wr *sdk.WorkflowRun) error {
-	_, end := observability.Span(ctx, "workflow.resyncCommitStatus",
-		observability.Tag(observability.TagWorkflow, wr.Workflow.Name),
-		observability.Tag(observability.TagWorkflowRun, wr.Number),
+func ResyncCommitStatus(ctx context.Context, db *gorp.DbMap, store cache.Store, proj sdk.Project, wr *sdk.WorkflowRun) error {
+	_, end := telemetry.Span(ctx, "workflow.resyncCommitStatus",
+		telemetry.Tag(telemetry.TagWorkflow, wr.Workflow.Name),
+		telemetry.Tag(telemetry.TagWorkflowRun, wr.Number),
 	)
 	defer end()
 
@@ -44,7 +44,13 @@ func ResyncCommitStatus(ctx context.Context, db gorp.SqlExecutor, store cache.St
 	return nil
 }
 
-func (e *VCSEventMessenger) SendVCSEvent(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, wr sdk.WorkflowRun, nodeRun sdk.WorkflowNodeRun) error {
+func (e *VCSEventMessenger) SendVCSEvent(ctx context.Context, db *gorp.DbMap, store cache.Store, proj sdk.Project, wr sdk.WorkflowRun, nodeRun sdk.WorkflowNodeRun) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return sdk.WithStack(err)
+	}
+	defer tx.Rollback() // nolint
+
 	if nodeRun.Status == sdk.StatusWaiting {
 		return nil
 	}
@@ -86,7 +92,7 @@ loopNotif:
 	vcsServerName := wr.Workflow.Applications[node.Context.ApplicationID].VCSServer
 	repoFullName := wr.Workflow.Applications[node.Context.ApplicationID].RepositoryFullname
 
-	vcsServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, db, proj.Key, vcsServerName)
+	vcsServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, tx, proj.Key, vcsServerName)
 	if err != nil {
 		log.Debug("SendVCSEvent> No vcsServer found: %v", err)
 		return nil
@@ -95,7 +101,7 @@ loopNotif:
 	//Get the RepositoriesManager Client
 	if e.vcsClient == nil {
 		var err error
-		e.vcsClient, err = repositoriesmanager.AuthorizedClient(ctx, db, store, proj.Key, vcsServer)
+		e.vcsClient, err = repositoriesmanager.AuthorizedClient(ctx, tx, store, proj.Key, vcsServer)
 		if err != nil {
 			return err
 		}
@@ -128,7 +134,7 @@ loopNotif:
 	}
 
 	if statusFound == nil || statusFound.State == "" {
-		if err := e.sendVCSEventStatus(ctx, db, store, proj.Key, wr, &nodeRun, notif, vcsServer.Name); err != nil {
+		if err := e.sendVCSEventStatus(ctx, tx, store, proj.Key, wr, &nodeRun, notif, vcsServer.Name); err != nil {
 			return err
 		}
 	} else {
@@ -153,7 +159,7 @@ loopNotif:
 		}
 
 		if !skipStatus {
-			if err := e.sendVCSEventStatus(ctx, db, store, proj.Key, wr, &nodeRun, notif, vcsServer.Name); err != nil {
+			if err := e.sendVCSEventStatus(ctx, tx, store, proj.Key, wr, &nodeRun, notif, vcsServer.Name); err != nil {
 				return err
 			}
 		}
@@ -162,9 +168,14 @@ loopNotif:
 	if !sdk.StatusIsTerminated(nodeRun.Status) {
 		return nil
 	}
-	if err := e.sendVCSPullRequestComment(ctx, db, wr, &nodeRun, notif, vcsServer.Name); err != nil {
+	if err := e.sendVCSPullRequestComment(ctx, tx, wr, &nodeRun, notif, vcsServer.Name); err != nil {
 		return err
 	}
+
+	if err := tx.Commit(); err != nil {
+		return sdk.WithStack(err)
+	}
+
 	return nil
 }
 

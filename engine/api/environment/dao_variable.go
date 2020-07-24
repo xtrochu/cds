@@ -5,9 +5,10 @@ import (
 	"time"
 
 	"github.com/go-gorp/gorp"
+	"github.com/lib/pq"
 
-	"github.com/ovh/cds/engine/api/database/gorpmapping"
 	"github.com/ovh/cds/sdk"
+	"github.com/ovh/cds/sdk/gorpmapping"
 	"github.com/ovh/cds/sdk/log"
 )
 
@@ -32,6 +33,43 @@ func loadAllVariables(db gorp.SqlExecutor, query gorpmapping.Query, opts ...gorp
 		vars = append(vars, res[i].Variable())
 	}
 	return vars, nil
+}
+
+// LoadAllVariablesForEnvsWithDecryption load all variables for all given environments
+func LoadAllVariablesForEnvsWithDecryption(ctx context.Context, db gorp.SqlExecutor, envIDS []int64) (map[int64][]sdk.EnvironmentVariable, error) {
+	return loadAllVariablesForEnvs(ctx, db, envIDS, gorpmapping.GetOptions.WithDecryption)
+}
+
+func loadAllVariablesForEnvs(ctx context.Context, db gorp.SqlExecutor, envIDS []int64, opts ...gorpmapping.GetOptionFunc) (map[int64][]sdk.EnvironmentVariable, error) {
+	var res []dbEnvironmentVariable
+	query := gorpmapping.NewQuery(`
+		SELECT *
+		FROM environment_variable
+		WHERE environment_id = ANY($1)
+		ORDER BY environment_id
+	`).Args(pq.Int64Array(envIDS))
+	if err := gorpmapping.GetAll(ctx, db, query, &res, opts...); err != nil {
+		return nil, err
+	}
+
+	envsVars := make(map[int64][]sdk.EnvironmentVariable)
+
+	for i := range res {
+		dbEnvVar := res[i]
+		isValid, err := gorpmapping.CheckSignature(dbEnvVar, dbEnvVar.Signature)
+		if err != nil {
+			return nil, err
+		}
+		if !isValid {
+			log.Error(ctx, "environment.loadAllVariablesForEnvs> environment variable id %d data corrupted", dbEnvVar.ID)
+			continue
+		}
+		if _, ok := envsVars[dbEnvVar.EnvironmentID]; !ok {
+			envsVars[dbEnvVar.EnvironmentID] = make([]sdk.EnvironmentVariable, 0)
+		}
+		envsVars[dbEnvVar.EnvironmentID] = append(envsVars[dbEnvVar.EnvironmentID], dbEnvVar.Variable())
+	}
+	return envsVars, nil
 }
 
 // LoadAllVariables Get all variable for the given environment
@@ -103,7 +141,7 @@ func DeleteAllVariables(db gorp.SqlExecutor, environmentID int64) error {
 }
 
 // InsertVariable Insert a new variable in the given environment
-func InsertVariable(db gorp.SqlExecutor, envID int64, v *sdk.EnvironmentVariable, u sdk.Identifiable) error {
+func InsertVariable(db gorpmapping.SqlExecutorWithTx, envID int64, v *sdk.EnvironmentVariable, u sdk.Identifiable) error {
 	//Check variable name
 	rx := sdk.NamePatternRegex
 	if !rx.MatchString(v.Name) {
@@ -137,7 +175,7 @@ func InsertVariable(db gorp.SqlExecutor, envID int64, v *sdk.EnvironmentVariable
 }
 
 // UpdateVariable Update a variable in the given environment
-func UpdateVariable(db gorp.SqlExecutor, envID int64, variable *sdk.EnvironmentVariable, variableBefore *sdk.EnvironmentVariable, u sdk.Identifiable) error {
+func UpdateVariable(db gorpmapping.SqlExecutorWithTx, envID int64, variable *sdk.EnvironmentVariable, variableBefore *sdk.EnvironmentVariable, u sdk.Identifiable) error {
 	rx := sdk.NamePatternRegex
 	if !rx.MatchString(variable.Name) {
 		return sdk.NewErrorFrom(sdk.ErrInvalidName, "variable name should match %s", sdk.NamePattern)

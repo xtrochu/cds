@@ -80,9 +80,9 @@ func TestCanBeRun(t *testing.T) {
 func TestPurgeWorkflowRun(t *testing.T) {
 	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
 
-	_ = event.Initialize(context.Background(), db, cache)
+	_ = event.Initialize(context.TODO(), db.DbMap, cache)
 
-	mockVCSSservice, _ := assets.InsertService(t, db, "TestManualRunBuildParameterMultiApplication", services.TypeVCS)
+	mockVCSSservice, _ := assets.InsertService(t, db, "TestManualRunBuildParameterMultiApplication", sdk.TypeVCS)
 	defer func() {
 		services.Delete(db, mockVCSSservice) // nolint
 	}()
@@ -186,7 +186,7 @@ vcs_ssh_key: proj-blabla
 `
 	var eapp = new(exportentities.Application)
 	assert.NoError(t, yaml.Unmarshal([]byte(appS), eapp))
-	app, _, globalError := application.ParseAndImport(context.Background(), db, cache, *proj, eapp, application.ImportOptions{Force: true}, nil, u)
+	app, _, _, globalError := application.ParseAndImport(context.TODO(), db, cache, *proj, eapp, application.ImportOptions{Force: true}, nil, u)
 	assert.NoError(t, globalError)
 
 	proj, _ = project.LoadByID(db, proj.ID, project.LoadOptions.WithApplications, project.LoadOptions.WithPipelines, project.LoadOptions.WithEnvironments, project.LoadOptions.WithGroups)
@@ -230,7 +230,7 @@ vcs_ssh_key: proj-blabla
 	test.NoError(t, err)
 
 	for i := 0; i < 5; i++ {
-		wr, errWR := workflow.CreateRun(db, w1, nil, u)
+		wr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 		assert.NoError(t, errWR)
 		wr.Workflow = *w1
 		_, errWr := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wr, &sdk.WorkflowRunPostHandlerOption{
@@ -245,7 +245,7 @@ vcs_ssh_key: proj-blabla
 		test.NoError(t, errWr)
 	}
 
-	errP := workflow.PurgeWorkflowRun(context.Background(), db, *w1, nil)
+	errP := workflow.PurgeWorkflowRun(context.TODO(), db, *w1)
 	test.NoError(t, errP)
 
 	_, _, _, count, errRuns := workflow.LoadRuns(db, proj.Key, w1.Name, 0, 10, nil)
@@ -256,7 +256,7 @@ vcs_ssh_key: proj-blabla
 func TestPurgeWorkflowRunWithRunningStatus(t *testing.T) {
 	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
 
-	_ = event.Initialize(context.Background(), db, cache)
+	_ = event.Initialize(context.TODO(), db.DbMap, cache)
 
 	u, _ := assets.InsertAdminUser(t, db)
 	consumer, _ := authentication.LoadConsumerByTypeAndUserID(context.TODO(), db, sdk.ConsumerLocal, u.ID, authentication.LoadConsumerOptions.WithAuthentifiedUser)
@@ -317,7 +317,7 @@ func TestPurgeWorkflowRunWithRunningStatus(t *testing.T) {
 	test.NoError(t, err)
 
 	for i := 0; i < 5; i++ {
-		wfr, errWR := workflow.CreateRun(db, w1, nil, u)
+		wfr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 		assert.NoError(t, errWR)
 		wfr.Workflow = *w1
 		_, errWr := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wfr, &sdk.WorkflowRunPostHandlerOption{
@@ -334,7 +334,7 @@ func TestPurgeWorkflowRunWithRunningStatus(t *testing.T) {
 		test.NoError(t, workflow.UpdateWorkflowRunStatus(db, wfr))
 	}
 
-	errP := workflow.PurgeWorkflowRun(context.Background(), db, *w1, nil)
+	errP := workflow.PurgeWorkflowRun(context.TODO(), db, *w1)
 	test.NoError(t, errP)
 
 	wruns, _, _, count, errRuns := workflow.LoadRuns(db, proj.Key, w1.Name, 0, 10, nil)
@@ -354,9 +354,9 @@ func TestPurgeWorkflowRunWithRunningStatus(t *testing.T) {
 func TestPurgeWorkflowRunWithOneSuccessWorkflowRun(t *testing.T) {
 	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
 
-	_ = event.Initialize(context.Background(), db, cache)
+	_ = event.Initialize(context.TODO(), db.DbMap, cache)
 
-	mockVCSSservice, _ := assets.InsertService(t, db, "TestManualRunBuildParameterMultiApplication", services.TypeVCS)
+	mockVCSSservice, _ := assets.InsertService(t, db, "TestManualRunBuildParameterMultiApplication", sdk.TypeVCS)
 	defer func() {
 		services.Delete(db, mockVCSSservice) // nolint
 	}()
@@ -461,7 +461,7 @@ vcs_ssh_key: proj-blabla
 `
 	var eapp = new(exportentities.Application)
 	assert.NoError(t, yaml.Unmarshal([]byte(appS), eapp))
-	app, _, globalError := application.ParseAndImport(context.Background(), db, cache, *proj, eapp, application.ImportOptions{Force: true}, nil, u)
+	app, _, _, globalError := application.ParseAndImport(context.TODO(), db, cache, *proj, eapp, application.ImportOptions{Force: true}, nil, u)
 	assert.NoError(t, globalError)
 
 	proj, _ = project.LoadByID(db, proj.ID, project.LoadOptions.WithApplications, project.LoadOptions.WithPipelines, project.LoadOptions.WithEnvironments, project.LoadOptions.WithGroups)
@@ -504,7 +504,7 @@ vcs_ssh_key: proj-blabla
 	})
 	test.NoError(t, err)
 
-	wr, errWR := workflow.CreateRun(db, w1, nil, u)
+	wr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 	assert.NoError(t, errWR)
 	wr.Workflow = *w1
 	_, errWr := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wr, &sdk.WorkflowRunPostHandlerOption{
@@ -519,7 +519,7 @@ vcs_ssh_key: proj-blabla
 	test.NoError(t, errWr)
 
 	for i := 0; i < 5; i++ {
-		wfr, errWR := workflow.CreateRun(db, w1, nil, u)
+		wfr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 		assert.NoError(t, errWR)
 		wfr.Workflow = *w1
 		_, errWr := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wfr, &sdk.WorkflowRunPostHandlerOption{
@@ -537,7 +537,7 @@ vcs_ssh_key: proj-blabla
 		test.NoError(t, workflow.UpdateWorkflowRunStatus(db, wfr))
 	}
 
-	errP := workflow.PurgeWorkflowRun(context.Background(), db, *w1, nil)
+	errP := workflow.PurgeWorkflowRun(context.TODO(), db, *w1)
 	test.NoError(t, errP)
 
 	wruns, _, _, count, errRuns := workflow.LoadRuns(db, proj.Key, w1.Name, 0, 10, nil)
@@ -556,9 +556,9 @@ vcs_ssh_key: proj-blabla
 func TestPurgeWorkflowRunWithNoSuccessWorkflowRun(t *testing.T) {
 	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
 
-	_ = event.Initialize(context.Background(), db, cache)
+	_ = event.Initialize(context.TODO(), db.DbMap, cache)
 
-	mockVCSSservice, _ := assets.InsertService(t, db, "TestManualRunBuildParameterMultiApplication", services.TypeVCS)
+	mockVCSSservice, _ := assets.InsertService(t, db, "TestManualRunBuildParameterMultiApplication", sdk.TypeVCS)
 	defer func() {
 		services.Delete(db, mockVCSSservice) // nolint
 	}()
@@ -652,7 +652,7 @@ vcs_ssh_key: proj-blabla
 `
 	var eapp = new(exportentities.Application)
 	assert.NoError(t, yaml.Unmarshal([]byte(appS), eapp))
-	app, _, globalError := application.ParseAndImport(context.Background(), db, cache, *proj, eapp, application.ImportOptions{Force: true}, nil, u)
+	app, _, _, globalError := application.ParseAndImport(context.TODO(), db, cache, *proj, eapp, application.ImportOptions{Force: true}, nil, u)
 	assert.NoError(t, globalError)
 
 	proj, _ = project.LoadByID(db, proj.ID, project.LoadOptions.WithApplications, project.LoadOptions.WithPipelines, project.LoadOptions.WithEnvironments, project.LoadOptions.WithGroups)
@@ -696,7 +696,7 @@ vcs_ssh_key: proj-blabla
 	test.NoError(t, err)
 
 	for i := 0; i < 5; i++ {
-		wfr, errWR := workflow.CreateRun(db, w1, nil, u)
+		wfr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 		assert.NoError(t, errWR)
 		wfr.Workflow = *w1
 		_, errWr := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wfr, &sdk.WorkflowRunPostHandlerOption{
@@ -714,8 +714,11 @@ vcs_ssh_key: proj-blabla
 		test.NoError(t, workflow.UpdateWorkflowRunStatus(db, wfr))
 	}
 
-	errP := workflow.PurgeWorkflowRun(context.Background(), db, *w1, nil)
+	errP := workflow.PurgeWorkflowRun(context.TODO(), db, *w1)
 	test.NoError(t, errP)
+
+	n := workflow.CountWorkflowRunsMarkToDelete(context.TODO(), db, nil)
+	assert.True(t, n >= 3, "At least 3 runs must be mark to delete")
 
 	_, _, _, count, errRuns := workflow.LoadRuns(db, proj.Key, w1.Name, 0, 10, nil)
 	test.NoError(t, errRuns)
@@ -725,7 +728,7 @@ vcs_ssh_key: proj-blabla
 func TestPurgeWorkflowRunWithoutTags(t *testing.T) {
 	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
 
-	_ = event.Initialize(context.Background(), db, cache)
+	_ = event.Initialize(context.TODO(), db.DbMap, cache)
 
 	u, _ := assets.InsertAdminUser(t, db)
 	consumer, _ := authentication.LoadConsumerByTypeAndUserID(context.TODO(), db, sdk.ConsumerLocal, u.ID, authentication.LoadConsumerOptions.WithAuthentifiedUser)
@@ -785,7 +788,7 @@ func TestPurgeWorkflowRunWithoutTags(t *testing.T) {
 
 	branches := []string{"master", "master", "master", "develop", "develop", "testBr", "testBr", "testBr", "testBr", "test4"}
 	for i := 0; i < 10; i++ {
-		wr, errWR := workflow.CreateRun(db, w1, nil, u)
+		wr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 		assert.NoError(t, errWR)
 		wr.Workflow = *w1
 		_, errWr := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wr, &sdk.WorkflowRunPostHandlerOption{
@@ -800,7 +803,7 @@ func TestPurgeWorkflowRunWithoutTags(t *testing.T) {
 		test.NoError(t, errWr)
 	}
 
-	errP := workflow.PurgeWorkflowRun(context.Background(), db, *w1, nil)
+	errP := workflow.PurgeWorkflowRun(context.TODO(), db, *w1)
 	test.NoError(t, errP)
 
 	_, _, _, count, errRuns := workflow.LoadRuns(db, proj.Key, w1.Name, 0, 10, nil)
@@ -811,7 +814,7 @@ func TestPurgeWorkflowRunWithoutTags(t *testing.T) {
 func TestPurgeWorkflowRunWithoutTagsBiggerHistoryLength(t *testing.T) {
 	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
 
-	_ = event.Initialize(context.Background(), db, cache)
+	_ = event.Initialize(context.TODO(), db.DbMap, cache)
 
 	u, _ := assets.InsertAdminUser(t, db)
 	consumer, _ := authentication.LoadConsumerByTypeAndUserID(context.TODO(), db, sdk.ConsumerLocal, u.ID, authentication.LoadConsumerOptions.WithAuthentifiedUser)
@@ -871,7 +874,7 @@ func TestPurgeWorkflowRunWithoutTagsBiggerHistoryLength(t *testing.T) {
 
 	branches := []string{"master", "master", "master", "develop", "develop", "testBr", "testBr", "testBr", "testBr", "test4"}
 	for i := 0; i < 10; i++ {
-		wr, errWR := workflow.CreateRun(db, w1, nil, u)
+		wr, errWR := workflow.CreateRun(db.DbMap, w1, nil, u)
 		assert.NoError(t, errWR)
 		wr.Workflow = *w1
 		_, errWr := workflow.StartWorkflowRun(context.TODO(), db, cache, *proj, wr, &sdk.WorkflowRunPostHandlerOption{
@@ -886,7 +889,7 @@ func TestPurgeWorkflowRunWithoutTagsBiggerHistoryLength(t *testing.T) {
 		test.NoError(t, errWr)
 	}
 
-	errP := workflow.PurgeWorkflowRun(context.Background(), db, *w1, nil)
+	errP := workflow.PurgeWorkflowRun(context.TODO(), db, *w1)
 	test.NoError(t, errP)
 
 	wruns, _, _, count, errRuns := workflow.LoadRuns(db, proj.Key, w1.Name, 0, 10, nil)

@@ -598,12 +598,7 @@ func TestUpdateSimpleWorkflowWithApplicationEnvPipelineParametersAndPayload(t *t
 	assert.Equal(t, app2.ID, w2.WorkflowData.Node.Context.ApplicationID)
 	assert.Equal(t, env.ID, w2.WorkflowData.Node.Context.EnvironmentID)
 
-	tx, err := db.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
-	require.NoError(t, workflow.Delete(context.TODO(), tx, cache, *proj, w2))
-
-	require.NoError(t, tx.Commit())
+	require.NoError(t, workflow.Delete(context.TODO(), db, cache, *proj, w2))
 }
 
 func TestInsertComplexeWorkflowWithJoinsAndExport(t *testing.T) {
@@ -1211,18 +1206,14 @@ func TestUpdateWorkflowWithJoins(t *testing.T) {
 		}
 	}
 
-	tx, err := db.Begin()
-	require.NoError(t, err)
-	defer tx.Rollback()
-	test.NoError(t, workflow.Delete(context.TODO(), tx, cache, *proj, w2))
-	require.NoError(t, tx.Commit())
+	require.NoError(t, workflow.Delete(context.TODO(), db, cache, *proj, w2))
 }
 
 func TestInsertSimpleWorkflowWithHookAndExport(t *testing.T) {
 	db, cache := test.SetupPG(t)
 
-	test.NoError(t, workflow.CreateBuiltinWorkflowHookModels(db))
-	test.NoError(t, workflow.CreateBuiltinWorkflowOutgoingHookModels(db))
+	test.NoError(t, workflow.CreateBuiltinWorkflowHookModels(db.DbMap))
+	test.NoError(t, workflow.CreateBuiltinWorkflowOutgoingHookModels(db.DbMap))
 
 	hookModels, err := workflow.LoadHookModels(db)
 	test.NoError(t, err)
@@ -1234,7 +1225,7 @@ func TestInsertSimpleWorkflowWithHookAndExport(t *testing.T) {
 		}
 	}
 
-	mockHookSservice, _ := assets.InsertService(t, db, "TestManualRunBuildParameterMultiApplication", services.TypeHooks)
+	mockHookSservice, _ := assets.InsertService(t, db, "TestManualRunBuildParameterMultiApplication", sdk.TypeHooks)
 	defer func() {
 		services.Delete(db, mockHookSservice) // nolint
 	}()
@@ -1480,7 +1471,7 @@ func TestInsertAndDeleteMultiHook(t *testing.T) {
 	db, cache := test.SetupPG(t, bootstrap.InitiliazeDB)
 
 	u, _ := assets.InsertAdminUser(t, db)
-	test.NoError(t, workflow.CreateBuiltinWorkflowHookModels(db))
+	test.NoError(t, workflow.CreateBuiltinWorkflowHookModels(db.DbMap))
 
 	hookModels, err := workflow.LoadHookModels(db)
 	test.NoError(t, err)
@@ -1516,8 +1507,8 @@ func TestInsertAndDeleteMultiHook(t *testing.T) {
 		require.NoError(t, services.Delete(db, &srv))
 	}
 
-	a, _ := assets.InsertService(t, db, "TestInsertAndDeleteMultiHookVCS", services.TypeVCS)
-	b, _ := assets.InsertService(t, db, "TestInsertAndDeleteMultiHookHook", services.TypeHooks)
+	a, _ := assets.InsertService(t, db, "TestInsertAndDeleteMultiHookVCS", sdk.TypeVCS)
+	b, _ := assets.InsertService(t, db, "TestInsertAndDeleteMultiHookHook", sdk.TypeHooks)
 
 	defer func() {
 		_ = services.Delete(db, a)
@@ -1686,7 +1677,7 @@ vcs_ssh_key: proj-blabla
 `
 	var eapp = new(exportentities.Application)
 	assert.NoError(t, yaml.Unmarshal([]byte(appS), eapp))
-	app, _, globalError := application.ParseAndImport(context.Background(), db, cache, *proj, eapp, application.ImportOptions{Force: true}, nil, u)
+	app, _, _, globalError := application.ParseAndImport(context.Background(), db, cache, *proj, eapp, application.ImportOptions{Force: true}, nil, u)
 	assert.NoError(t, globalError)
 
 	proj.Applications = append(proj.Applications, *app)

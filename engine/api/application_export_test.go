@@ -52,7 +52,7 @@ func Test_getApplicationExportHandler(t *testing.T) {
 	k.Public = kk.Public
 	k.Private = kk.Private
 	k.KeyID = kk.KeyID
-	require.NoError(t, application.InsertKey(api.mustDB(), k))
+	require.NoError(t, application.InsertKey(db, k))
 
 	k2 := &sdk.ApplicationKey{
 		Name:          "mykey-ssh",
@@ -65,7 +65,7 @@ func Test_getApplicationExportHandler(t *testing.T) {
 	k2.Public = kssh.Public
 	k2.Private = kssh.Private
 	k2.KeyID = kssh.KeyID
-	require.NoError(t, application.InsertKey(api.mustDB(), k2))
+	require.NoError(t, application.InsertKey(db, k2))
 
 	//Prepare request
 	vars := map[string]string{

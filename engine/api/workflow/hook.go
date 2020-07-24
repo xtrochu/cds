@@ -8,14 +8,14 @@ import (
 	"strings"
 
 	"github.com/fsamin/go-dump"
-	"github.com/go-gorp/gorp"
 
 	"github.com/ovh/cds/engine/api/cache"
-	"github.com/ovh/cds/engine/api/observability"
 	"github.com/ovh/cds/engine/api/repositoriesmanager"
 	"github.com/ovh/cds/engine/api/services"
 	"github.com/ovh/cds/sdk"
+	"github.com/ovh/cds/sdk/gorpmapping"
 	"github.com/ovh/cds/sdk/log"
+	"github.com/ovh/cds/sdk/telemetry"
 )
 
 func computeHookToDelete(newWorkflow *sdk.Workflow, oldWorkflow *sdk.Workflow) map[string]sdk.NodeHook {
@@ -29,8 +29,8 @@ func computeHookToDelete(newWorkflow *sdk.Workflow, oldWorkflow *sdk.Workflow) m
 	return hookToDelete
 }
 
-func hookUnregistration(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, hookToDelete map[string]sdk.NodeHook) error {
-	ctx, end := observability.Span(ctx, "workflow.hookUnregistration")
+func hookUnregistration(ctx context.Context, db gorpmapping.SqlExecutorWithTx, store cache.Store, proj sdk.Project, hookToDelete map[string]sdk.NodeHook) error {
+	ctx, end := telemetry.Span(ctx, "workflow.hookUnregistration")
 	defer end()
 
 	if len(hookToDelete) == 0 {
@@ -62,7 +62,7 @@ func hookUnregistration(ctx context.Context, db gorp.SqlExecutor, store cache.St
 
 	//Push the hook to hooks µService
 	//Load service "hooks"
-	srvs, err := services.LoadAllByType(ctx, db, services.TypeHooks)
+	srvs, err := services.LoadAllByType(ctx, db, sdk.TypeHooks)
 	if err != nil {
 		return err
 	}
@@ -75,8 +75,8 @@ func hookUnregistration(ctx context.Context, db gorp.SqlExecutor, store cache.St
 	return nil
 }
 
-func hookRegistration(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, wf *sdk.Workflow, oldWorkflow *sdk.Workflow) error {
-	ctx, end := observability.Span(ctx, "workflow.hookRegistration")
+func hookRegistration(ctx context.Context, db gorpmapping.SqlExecutorWithTx, store cache.Store, proj sdk.Project, wf *sdk.Workflow, oldWorkflow *sdk.Workflow) error {
+	ctx, end := telemetry.Span(ctx, "workflow.hookRegistration")
 	defer end()
 
 	var oldHooks map[string]*sdk.NodeHook
@@ -89,7 +89,7 @@ func hookRegistration(ctx context.Context, db gorp.SqlExecutor, store cache.Stor
 		return nil
 	}
 
-	srvs, err := services.LoadAllByType(ctx, db, services.TypeHooks)
+	srvs, err := services.LoadAllByType(ctx, db, sdk.TypeHooks)
 	if err != nil {
 		return sdk.WrapError(err, "unable to get services")
 	}
@@ -208,8 +208,8 @@ func hookRegistration(ctx context.Context, db gorp.SqlExecutor, store cache.Stor
 	return nil
 }
 
-func updateSchedulerPayload(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, wf *sdk.Workflow, h *sdk.NodeHook) error {
-	ctx, end := observability.Span(ctx, "workflow.updateSchedulerPayload")
+func updateSchedulerPayload(ctx context.Context, db gorpmapping.SqlExecutorWithTx, store cache.Store, proj sdk.Project, wf *sdk.Workflow, h *sdk.NodeHook) error {
+	ctx, end := telemetry.Span(ctx, "workflow.updateSchedulerPayload")
 	defer end()
 
 	if h.HookModelName != sdk.SchedulerModelName {
@@ -278,8 +278,8 @@ func updateSchedulerPayload(ctx context.Context, db gorp.SqlExecutor, store cach
 	return nil
 }
 
-func createVCSConfiguration(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, h *sdk.NodeHook) error {
-	ctx, end := observability.Span(ctx, "workflow.createVCSConfiguration", observability.Tag("UUID", h.UUID))
+func createVCSConfiguration(ctx context.Context, db gorpmapping.SqlExecutorWithTx, store cache.Store, proj sdk.Project, h *sdk.NodeHook) error {
+	ctx, end := telemetry.Span(ctx, "workflow.createVCSConfiguration", telemetry.Tag("UUID", h.UUID))
 	defer end()
 	// Call VCS to know if repository allows webhook and get the configuration fields
 	projectVCSServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, db, proj.Key, h.Config["vcsServer"].Value)
@@ -324,7 +324,7 @@ func createVCSConfiguration(ctx context.Context, db gorp.SqlExecutor, store cach
 	if err := client.CreateHook(ctx, h.Config["repoFullName"].Value, &vcsHook); err != nil {
 		return sdk.WrapError(err, "Cannot create hook on repository: %+v", vcsHook)
 	}
-	observability.Current(ctx, observability.Tag("VCS_ID", vcsHook.ID))
+	telemetry.Current(ctx, telemetry.Tag("VCS_ID", vcsHook.ID))
 	h.Config[sdk.HookConfigWebHookID] = sdk.WorkflowNodeHookConfigValue{
 		Value:        vcsHook.ID,
 		Configurable: false,
@@ -342,8 +342,8 @@ func createVCSConfiguration(ctx context.Context, db gorp.SqlExecutor, store cach
 	return nil
 }
 
-func updateVCSConfiguration(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, h *sdk.NodeHook) error {
-	ctx, end := observability.Span(ctx, "workflow.updateVCSConfiguration", observability.Tag("UUID", h.UUID))
+func updateVCSConfiguration(ctx context.Context, db gorpmapping.SqlExecutorWithTx, store cache.Store, proj sdk.Project, h *sdk.NodeHook) error {
+	ctx, end := telemetry.Span(ctx, "workflow.updateVCSConfiguration", telemetry.Tag("UUID", h.UUID))
 	defer end()
 	// Call VCS to know if repository allows webhook and get the configuration fields
 	projectVCSServer, err := repositoriesmanager.LoadProjectVCSServerLinkByProjectKeyAndVCSServerName(ctx, db, proj.Key, h.Config["vcsServer"].Value)
@@ -390,7 +390,7 @@ func updateVCSConfiguration(ctx context.Context, db gorp.SqlExecutor, store cach
 }
 
 // DefaultPayload returns the default payload for the workflow root
-func DefaultPayload(ctx context.Context, db gorp.SqlExecutor, store cache.Store, proj sdk.Project, wf *sdk.Workflow) (interface{}, error) {
+func DefaultPayload(ctx context.Context, db gorpmapping.SqlExecutorWithTx, store cache.Store, proj sdk.Project, wf *sdk.Workflow) (interface{}, error) {
 	if wf.WorkflowData.Node.Context == nil || wf.WorkflowData.Node.Context.ApplicationID == 0 {
 		return nil, nil
 	}
