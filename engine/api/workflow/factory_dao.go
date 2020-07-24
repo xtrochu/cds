@@ -10,13 +10,14 @@ import (
 
 	"github.com/ovh/cds/engine/api/application"
 	"github.com/ovh/cds/engine/api/ascode"
+	"github.com/ovh/cds/engine/api/database/gorpmapping"
 	"github.com/ovh/cds/engine/api/environment"
 	"github.com/ovh/cds/engine/api/group"
 	"github.com/ovh/cds/engine/api/integration"
 	"github.com/ovh/cds/engine/api/pipeline"
 	"github.com/ovh/cds/engine/api/workflowtemplate"
+	"github.com/ovh/cds/engine/gorpmapper"
 	"github.com/ovh/cds/sdk"
-	"github.com/ovh/cds/sdk/gorpmapping"
 	"github.com/ovh/cds/sdk/log"
 )
 
@@ -212,40 +213,40 @@ func (dao WorkflowDAO) GetLoaders() []gorpmapping.GetOptionFunc {
 	var loaders = []gorpmapping.GetOptionFunc{}
 
 	if dao.Loaders.WithApplications {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withApplications(db, ws)
 		})
 	}
 
 	if dao.Loaders.WithEnvironments {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withEnvironments(db, ws)
 		})
 	}
 
 	if dao.Loaders.WithDeepPipelines {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withPipelines(db, ws, true)
 		})
 	} else if dao.Loaders.WithPipelines {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withPipelines(db, ws, false)
 		})
 	}
 
 	if dao.Loaders.WithAsCodeUpdateEvents {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withAsCodeUpdateEvents(db, ws)
 		})
 	}
 
 	if !dao.Loaders.WithIcon {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			for j := range *ws {
 				w := (*ws)[j]
@@ -256,46 +257,46 @@ func (dao WorkflowDAO) GetLoaders() []gorpmapping.GetOptionFunc {
 	}
 
 	if dao.Loaders.WithIntegrations {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withIntegrations(db, ws)
 		})
 	}
 
 	if dao.Loaders.WithTemplate {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withTemplates(db, ws)
 		})
 	}
 
 	if dao.Loaders.WithLabels {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withLabels(db, ws)
 		})
 	}
 
 	if dao.Loaders.WithFavoritesForUserID != "" {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withFavorites(db, ws, dao.Loaders.WithFavoritesForUserID)
 		})
 	}
 
 	if dao.Loaders.WithRuns != 0 {
-		loaders = append(loaders, func(db gorp.SqlExecutor, i interface{}) error {
+		loaders = append(loaders, func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withRuns(db, ws, dao.Loaders.WithRuns)
 		})
 	}
 
 	loaders = append(loaders,
-		func(db gorp.SqlExecutor, i interface{}) error {
+		func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withGroups(db, ws)
 		},
-		func(db gorp.SqlExecutor, i interface{}) error {
+		func(m *gorpmapper.Mapper, db gorp.SqlExecutor, i interface{}) error {
 			ws := i.(*[]Workflow)
 			return dao.withNotifications(db, ws)
 		})

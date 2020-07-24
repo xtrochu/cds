@@ -5,23 +5,23 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/go-gorp/gorp"
 	"github.com/lib/pq"
 
-	"github.com/go-gorp/gorp"
-
+	"github.com/ovh/cds/engine/api/database/gorpmapping"
+	"github.com/ovh/cds/engine/gorpmapper"
 	"github.com/ovh/cds/sdk"
-	"github.com/ovh/cds/sdk/gorpmapping"
 	"github.com/ovh/cds/sdk/log"
 )
 
 type dbApplication struct {
-	gorpmapping.SignedEntity
+	gorpmapper.SignedEntity
 	sdk.Application
 }
 
-func (e dbApplication) Canonical() gorpmapping.CanonicalForms {
+func (e dbApplication) Canonical() gorpmapper.CanonicalForms {
 	var _ = []interface{}{e.ProjectID, e.Name}
-	return gorpmapping.CanonicalForms{
+	return gorpmapper.CanonicalForms{
 		"{{print .ProjectID}}{{.Name}}",
 	}
 }
@@ -196,7 +196,7 @@ func LoadByWorkflowID(ctx context.Context, db gorp.SqlExecutor, workflowID int64
 }
 
 // Insert add an application id database
-func Insert(db gorpmapping.SqlExecutorWithTx, projectID int64, app *sdk.Application) error {
+func Insert(db gorpmapper.SqlExecutorWithTx, projectID int64, app *sdk.Application) error {
 	if err := app.IsValid(); err != nil {
 		return sdk.WrapError(err, "application is not valid")
 	}
@@ -219,7 +219,7 @@ func Insert(db gorpmapping.SqlExecutorWithTx, projectID int64, app *sdk.Applicat
 }
 
 // Update updates application id database
-func Update(ctx context.Context, db gorpmapping.SqlExecutorWithTx, app *sdk.Application) error {
+func Update(ctx context.Context, db gorpmapper.SqlExecutorWithTx, app *sdk.Application) error {
 	if app.RepositoryStrategy.Password == sdk.PasswordPlaceholder {
 		appTmp, err := LoadByIDWithClearVCSStrategyPassword(ctx, db, app.ID)
 		if err != nil {

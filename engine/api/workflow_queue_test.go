@@ -35,8 +35,8 @@ import (
 	"github.com/ovh/cds/engine/api/test/assets"
 	"github.com/ovh/cds/engine/api/worker"
 	"github.com/ovh/cds/engine/api/workflow"
+	"github.com/ovh/cds/engine/gorpmapper"
 	"github.com/ovh/cds/sdk"
-	"github.com/ovh/cds/sdk/gorpmapping"
 	"github.com/ovh/cds/sdk/log"
 )
 
@@ -54,7 +54,7 @@ type testRunWorkflowCtx struct {
 	model         *sdk.Model
 }
 
-func testRunWorkflow(t *testing.T, api *API, db gorpmapping.SqlExecutorWithTx, router *Router) testRunWorkflowCtx {
+func testRunWorkflow(t *testing.T, api *API, db gorpmapper.SqlExecutorWithTx, router *Router) testRunWorkflowCtx {
 	u, pass := assets.InsertLambdaUser(t, db)
 	key := "proj-" + sdk.RandomString(10)
 	proj := assets.InsertTestProject(t, db, api.Cache, key, key)
@@ -283,7 +283,7 @@ func testGetWorkflowJobAsRegularUser(t *testing.T, api *API, router *Router, jwt
 	ctx.job = &jobs[len(jobs)-1]
 }
 
-func testGetWorkflowJobAsWorker(t *testing.T, api *API, db gorpmapping.SqlExecutorWithTx, router *Router, ctx *testRunWorkflowCtx) {
+func testGetWorkflowJobAsWorker(t *testing.T, api *API, db gorpmapper.SqlExecutorWithTx, router *Router, ctx *testRunWorkflowCtx) {
 	testRegisterWorker(t, api, db, router, ctx)
 
 	uri := router.GetRoute("GET", api.getWorkflowJobQueueHandler, nil)
@@ -305,7 +305,7 @@ func testGetWorkflowJobAsWorker(t *testing.T, api *API, db gorpmapping.SqlExecut
 	ctx.job = &jobs[0]
 }
 
-func testGetWorkflowJobAsHatchery(t *testing.T, api *API, db gorpmapping.SqlExecutorWithTx, router *Router, ctx *testRunWorkflowCtx) {
+func testGetWorkflowJobAsHatchery(t *testing.T, api *API, db gorpmapper.SqlExecutorWithTx, router *Router, ctx *testRunWorkflowCtx) {
 	uri := router.GetRoute("GET", api.getWorkflowJobQueueHandler, nil)
 	test.NotEmpty(t, uri)
 
@@ -327,7 +327,7 @@ func testGetWorkflowJobAsHatchery(t *testing.T, api *API, db gorpmapping.SqlExec
 	ctx.job = &jobs[0]
 }
 
-func testRegisterWorker(t *testing.T, api *API, db gorpmapping.SqlExecutorWithTx, router *Router, ctx *testRunWorkflowCtx) {
+func testRegisterWorker(t *testing.T, api *API, db gorpmapper.SqlExecutorWithTx, router *Router, ctx *testRunWorkflowCtx) {
 	g, err := group.LoadByID(context.TODO(), api.mustDB(), ctx.user.Groups[0].ID)
 	if err != nil {
 		t.Fatalf("Error getting group: %+v", err)
@@ -343,7 +343,7 @@ func testRegisterWorker(t *testing.T, api *API, db gorpmapping.SqlExecutorWithTx
 	ctx.model = model
 }
 
-func testRegisterHatchery(t *testing.T, api *API, db gorpmapping.SqlExecutorWithTx, router *Router, ctx *testRunWorkflowCtx) {
+func testRegisterHatchery(t *testing.T, api *API, db gorpmapper.SqlExecutorWithTx, router *Router, ctx *testRunWorkflowCtx) {
 	h, _, _, jwt := assets.InsertHatchery(t, db, ctx.user.Groups[0])
 	ctx.hatchery = h
 	ctx.hatcheryToken = jwt
