@@ -20,7 +20,7 @@ func TestLoadItem(t *testing.T) {
 
 	db, _ := test.SetupPGWithMapper(t, m, sdk.TypeCDN)
 
-	apiRef := index.ApiRef{
+	apiRef := sdk.CDNLogAPIRef{
 		ProjectKey: sdk.RandomString(10),
 	}
 	hashRefU, err := hashstructure.Hash(apiRef, nil)
@@ -28,8 +28,8 @@ func TestLoadItem(t *testing.T) {
 	hashRef := strconv.FormatUint(hashRefU, 10)
 
 	i := index.Item{
-		ApiRef:     apiRef,
-		ApiRefHash: hashRef,
+		APIRef:     apiRef,
+		APIRefHash: hashRef,
 		Type:       index.TypeItemStepLog,
 	}
 	require.NoError(t, index.InsertItem(context.TODO(), m, db, &i))

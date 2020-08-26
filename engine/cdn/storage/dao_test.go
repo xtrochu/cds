@@ -42,7 +42,7 @@ func TestLoadOldItemUnitByItemStatusAndDuration(t *testing.T) {
 
 	i1 := &index.Item{
 		ID:         sdk.UUID(),
-		ApiRefHash: sdk.UUID(),
+		APIRefHash: sdk.UUID(),
 		Type:       index.TypeItemStepLog,
 		Status:     index.StatusItemCompleted,
 	}
@@ -58,7 +58,7 @@ func TestLoadOldItemUnitByItemStatusAndDuration(t *testing.T) {
 
 	i2 := &index.Item{
 		ID:         sdk.UUID(),
-		ApiRefHash: sdk.UUID(),
+		APIRefHash: sdk.UUID(),
 		Type:       index.TypeItemStepLog,
 		Status:     index.StatusItemIncoming,
 	}
