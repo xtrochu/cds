@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ovh/cds/engine/api"
+	"github.com/ovh/cds/engine/api/database/gorpmapping"
+	"github.com/ovh/cds/engine/api/workflow"
 	"strings"
 
 	"github.com/xanzy/go-gitlab"
@@ -19,6 +22,7 @@ type statusData struct {
 	desc         string
 	repoFullName string
 	hash         string
+	coverage     float64
 }
 
 func getGitlabStateFromStatus(s string) gitlab.BuildStateValue {
@@ -77,6 +81,7 @@ func (c *gitlabClient) SetStatus(ctx context.Context, event sdk.Event) error {
 		Ref:         &data.branchName,
 		TargetURL:   &data.url,
 		Description: &data.desc,
+		Coverage:    &data.coverage,
 	}
 
 	val, _, err := c.client.Commits.GetCommitStatuses(data.repoFullName, data.hash, nil)
@@ -155,6 +160,12 @@ func processWorkflowNodeRunEvent(event sdk.Event, uiURL string) (statusData, err
 		event.WorkflowName,
 		eventNR.Number,
 	)
+	cdsApi := api.New()
+	if mapping := cdsApi.DBConnectionFactory.GetDBMap(gorpmapping.Mapper)(); mapping != nil {
+		if existingReport, errLoad := workflow.LoadCoverageReport(mapping, eventNR.RunID); errLoad == nil {
+			data.coverage = float64(existingReport.Report.CoveredLines) / float64(existingReport.Report.TotalLines) * 100.0
+		}
+	}
 
 	data.desc = sdk.VCSCommitStatusDescription(event.ProjectKey, event.WorkflowName, eventNR)
 	data.hash = eventNR.Hash
